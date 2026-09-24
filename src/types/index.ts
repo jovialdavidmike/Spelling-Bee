@@ -237,6 +237,7 @@ export interface TeacherAssignment {
     allowLateSubmission: boolean;
   };
   wordIds?: string[];
+  assignedStudentIds?: string[];
   customWords?: Word[];
   teacherComments?: Record<string, string>; // studentId -> comment
 }
@@ -362,6 +363,8 @@ export interface TeacherActivityItem {
   timestamp: string;
 }
 
+export * from './competition';
+
 export type AppView = 
   // Public
   | 'landing'
@@ -372,6 +375,8 @@ export type AppView =
   | 'practice'
   | 'practice-setup'
   | 'competition'
+  | 'competition-session'
+  | 'competition-results'
   | 'word-library'
   | 'mistakes'
   | 'progress'
@@ -388,6 +393,9 @@ export type AppView =
   | 'teacher-word-sets'
   | 'teacher-reports'
   | 'teacher-competition'
+  | 'teacher-competition-builder'
+  | 'teacher-competition-live'
+  | 'teacher-competition-results'
   | 'teacher-settings';
 
 export type UserRole = 'guest' | 'student' | 'teacher';

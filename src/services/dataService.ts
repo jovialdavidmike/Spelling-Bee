@@ -211,6 +211,27 @@ class DataService {
     this.persist(STORAGE_KEYS.STUDENT, this.student);
   }
 
+  public recordSpellingAttempt(
+    studentId: string,
+    wordId: string,
+    submittedText: string,
+    isCorrect: boolean,
+    mode: 'practice' | 'assessment' | 'competition' = 'competition',
+    responseTimeMs: number = 0
+  ): void {
+    if (!isCorrect) {
+      this.recordMistake(wordId);
+    }
+    const student = this.enrolledStudents.find(s => s.id === studentId);
+    if (student) {
+      student.wordsPracticed += 1;
+      if (isCorrect) student.wordsMastered += 1;
+      student.accuracy = Math.round((student.wordsMastered / Math.max(1, student.wordsPracticed)) * 100);
+      student.lastActive = 'Just now';
+      this.persist(STORAGE_KEYS.ENROLLED_STUDENTS, this.enrolledStudents);
+    }
+  }
+
   // --- PRACTICE SESSIONS & ATTEMPTS ---
   public recordPracticeSessionResult(session: PracticeSession): void {
     this.practiceSessions.unshift(session);

@@ -33,6 +33,11 @@ import { TeacherCompetitionRoom } from './components/teacher/TeacherCompetitionR
 import { TeacherReports } from './components/teacher/TeacherReports';
 import { TeacherSettings } from './components/teacher/TeacherSettings';
 import { TeacherClasses } from './components/teacher/TeacherClasses';
+import { TeacherCompetitionBuilder } from './components/teacher/TeacherCompetitionBuilder';
+import { TeacherCompetitionLive } from './components/teacher/TeacherCompetitionLive';
+import { TeacherCompetitionResults } from './components/teacher/TeacherCompetitionResults';
+import { CompetitionLiveSession } from './components/student/CompetitionLiveSession';
+import { CompetitionsHub } from './components/common/CompetitionsHub';
 import { AuthModal } from './components/common/AuthModal';
 
 export default function App() {
@@ -44,6 +49,7 @@ export default function App() {
   const [activeSessionTitle, setActiveSessionTitle] = useState<string | undefined>(undefined);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | undefined>(undefined);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('std_01');
+  const [selectedCompetitionId, setSelectedCompetitionId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const handleNavigate = (view: AppView) => {
@@ -139,7 +145,35 @@ export default function App() {
           />
         );
       case 'competition':
-        return <CompetitionMode onNavigate={handleNavigate} />;
+        return (
+          <CompetitionsHub
+            currentRole={currentRole}
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            onSelectCompetition={(id) => setSelectedCompetitionId(id)}
+          />
+        );
+      case 'competition-session':
+        return (
+          <CompetitionLiveSession
+            competitionId={selectedCompetitionId}
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            onLaunchPracticeMistakes={(wordIds) => {
+              setActiveCustomWordIds(wordIds);
+              setActiveSessionTitle('Remedial Practice: Competition Missed Words');
+              handleNavigate('practice');
+            }}
+          />
+        );
+      case 'competition-results':
+        return (
+          <TeacherCompetitionResults
+            competitionId={selectedCompetitionId}
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+          />
+        );
       case 'word-library':
         return (
           <WordLibrary
