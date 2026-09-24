@@ -1,0 +1,7 @@
+{
+  "name": "SpellReady - Spelling Bee Practice Platform",
+  "description": "An independent spelling bee practice and competition preparation platform for secondary school students in Nigeria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
