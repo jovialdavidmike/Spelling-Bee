@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'teacher' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // --- USERS & PROFILES ---
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.keys().hasAll(['uid', 'displayName', 'role', 'accountStatus', 'profileCompleted']) &&
+        request.resource.data.role in ['student', 'teacher', 'admin'] &&
+        request.resource.data.accountStatus in ['active', 'pending', 'suspended', 'disabled'];
+
+      allow update: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        // Prevent role and accountStatus escalation from student client
+        (isAdmin() || (
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.accountStatus == resource.data.accountStatus
+        ));
+
+      allow delete: if isAdmin();
+
+      // Practice Sessions subcollection
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Mistakes subcollection
+      match /mistakes/{mistakeId} {
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // --- CLASSES ---
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.teacherId == request.auth.uid || isAdmin());
+    }
+
+    // --- COMPETITIONS ---
+    match /competitions/{competitionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isTeacher() || isAdmin() || request.resource.data.createdBy == request.auth.uid);
+      allow update, delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+
+      // Competition Results subcollection
+      match /results/{resultId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && (
+          request.resource.data.participantId == request.auth.uid ||
+          get(/databases/$(database)/documents/competitions/$(competitionId)).data.createdBy == request.auth.uid ||
+          isAdmin()
+        );
+        allow update: if isAuthenticated() && (
+          request.resource.data.participantId == request.auth.uid ||
+          get(/databases/$(database)/documents/competitions/$(competitionId)).data.createdBy == request.auth.uid ||
+          isAdmin()
+        );
+        allow delete: if isAdmin() || get(/databases/$(database)/documents/competitions/$(competitionId)).data.createdBy == request.auth.uid;
+      }
+    }
+
+    // --- ASSIGNMENTS ---
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isTeacher() || isAdmin() || request.resource.data.teacherId == request.auth.uid);
+      allow update, delete: if isAuthenticated() && (resource.data.teacherId == request.auth.uid || isAdmin());
+    }
+
+    // Default deny for unmapped documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

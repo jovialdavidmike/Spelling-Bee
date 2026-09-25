@@ -377,7 +377,7 @@ export const TeacherCompetitionBuilder: React.FC<Props> = ({
                 className="w-full text-xs p-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {classes.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.enrolledCount || 0} students)</option>
+                  <option key={c.id} value={c.id}>{c.name} ({c.studentCount || 0} students)</option>
                 ))}
               </select>
             </div>

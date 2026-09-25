@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile storing identity, role, and educational context",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Canonical user ID from Firebase Auth" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Full display name of the user" },
+        "role": { "type": "string", "enum": ["student", "teacher", "admin"], "description": "Role-based access level" },
+        "accountStatus": { "type": "string", "enum": ["active", "pending", "suspended", "disabled"], "description": "Current lifecycle status of account" },
+        "schoolId": { "type": "string", "description": "ID of school the user belongs to" },
+        "schoolName": { "type": "string", "description": "Name of school the user belongs to" },
+        "classId": { "type": "string", "description": "Class ID for student or assigned class for teacher" },
+        "className": { "type": "string", "description": "Human-readable class name e.g. SS 1 Gold" },
+        "studentCode": { "type": "string", "description": "Optional school-issued student identification code" },
+        "photoURL": { "type": "string", "description": "Avatar or profile picture URL" },
+        "profileCompleted": { "type": "boolean", "description": "Whether onboarding profile setup has finished" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last profile update" },
+        "lastLoginAt": { "type": "string", "description": "ISO timestamp of last login" }
+      },
+      "required": ["uid", "displayName", "role", "accountStatus", "profileCompleted"]
+    },
+    "ClassRoom": {
+      "title": "ClassRoom",
+      "description": "Educational class or cohort created by a teacher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Class unique identifier" },
+        "name": { "type": "string", "description": "Class name e.g. SS 1 Gold" },
+        "code": { "type": "string", "description": "Internal code e.g. SS1-GOLD" },
+        "schoolId": { "type": "string", "description": "School identifier" },
+        "schoolName": { "type": "string", "description": "School name" },
+        "teacherId": { "type": "string", "description": "UID of teacher who owns and manages the class" },
+        "joinCode": { "type": "string", "description": "6-character alphanumeric code for student enrollment" },
+        "studentCount": { "type": "number", "description": "Number of enrolled students" },
+        "academicSession": { "type": "string", "description": "Academic year e.g. 2026/2027" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of class creation" }
+      },
+      "required": ["id", "name", "teacherId", "joinCode"]
+    },
+    "PracticeSession": {
+      "title": "PracticeSession",
+      "description": "A student spelling practice or simulation session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Session unique identifier" },
+        "studentId": { "type": "string", "description": "UID of student who took the session" },
+        "title": { "type": "string", "description": "Title or mode description of the session" },
+        "mode": { "type": "string", "description": "Practice mode e.g. quick, focused, competition" },
+        "score": { "type": "number", "description": "Points or score achieved" },
+        "accuracy": { "type": "number", "description": "Percentage accuracy (0-100)" },
+        "correctCount": { "type": "number", "description": "Number of correctly spelled words" },
+        "incorrectCount": { "type": "number", "description": "Number of misspelled words" },
+        "durationSeconds": { "type": "number", "description": "Total duration in seconds" },
+        "startedAt": { "type": "string", "description": "ISO timestamp of session start" },
+        "completedAt": { "type": "string", "description": "ISO timestamp of session completion" }
+      },
+      "required": ["id", "studentId", "score", "accuracy"]
+    },
+    "Mistake": {
+      "title": "Mistake",
+      "description": "A misspelled word recorded for a student for targeted remedial practice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Mistake record identifier" },
+        "studentId": { "type": "string", "description": "UID of the student" },
+        "wordId": { "type": "string", "description": "Word identifier" },
+        "word": { "type": "string", "description": "Expected word spelling" },
+        "lastAttemptedAnswer": { "type": "string", "description": "Submitted wrong spelling" },
+        "errorType": { "type": "string", "description": "Category of spelling error" },
+        "resolved": { "type": "boolean", "description": "Whether mistake has been mastered" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of last mistake" }
+      },
+      "required": ["id", "studentId", "wordId"]
+    },
+    "Competition": {
+      "title": "Competition",
+      "description": "Spelling bee competition with rounds, rules, and participants",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Competition unique identifier" },
+        "title": { "type": "string", "description": "Competition title" },
+        "createdBy": { "type": "string", "description": "UID of teacher/admin creator" },
+        "schoolId": { "type": "string", "description": "School identifier" },
+        "classId": { "type": "string", "description": "Target class ID" },
+        "mode": { "type": "string", "description": "Competition mode e.g. class_competition, elimination" },
+        "status": { "type": "string", "description": "Status e.g. scheduled, live, completed" },
+        "accessCode": { "type": "string", "description": "Join code for participants" },
+        "scheduledStartTime": { "type": "string", "description": "Scheduled start ISO timestamp" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of creation" }
+      },
+      "required": ["id", "title", "createdBy", "status", "accessCode"]
+    },
+    "CompetitionResult": {
+      "title": "CompetitionResult",
+      "description": "Student competition participation result and standings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Result snapshot identifier" },
+        "competitionId": { "type": "string", "description": "Competition identifier" },
+        "participantId": { "type": "string", "description": "UID of participating student" },
+        "participantName": { "type": "string", "description": "Display name of student" },
+        "totalScore": { "type": "number", "description": "Final score" },
+        "totalAccuracy": { "type": "number", "description": "Final accuracy" },
+        "finalRank": { "type": "number", "description": "Final position in competition" },
+        "completedAt": { "type": "string", "description": "ISO timestamp of completion" }
+      },
+      "required": ["id", "competitionId", "participantId", "totalScore"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Canonical user profile document keyed by auth UID"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "PracticeSession",
+      "description": "User practice session history subcollection"
+    },
+    "/users/{userId}/mistakes/{mistakeId}": {
+      "schema": "Mistake",
+      "description": "User mistake list subcollection for targeted remediation"
+    },
+    "/classes/{classId}": {
+      "schema": "ClassRoom",
+      "description": "Classrooms managed by teachers with enrolled students"
+    },
+    "/competitions/{competitionId}": {
+      "schema": "Competition",
+      "description": "Spelling competitions organized by teachers"
+    },
+    "/competitions/{competitionId}/results/{resultId}": {
+      "schema": "CompetitionResult",
+      "description": "Participant results and final scores for a competition"
+    }
+  }
+}

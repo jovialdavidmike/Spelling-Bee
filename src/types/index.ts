@@ -1,3 +1,6 @@
+import { UserRole } from './auth';
+export * from './auth';
+
 export type DifficultyLevel = 'Beginner' | 'Easy' | 'Medium' | 'Hard' | 'Advanced' | 'Challenge';
 
 export type WordCategory = 
@@ -397,5 +400,3 @@ export type AppView =
   | 'teacher-competition-live'
   | 'teacher-competition-results'
   | 'teacher-settings';
-
-export type UserRole = 'guest' | 'student' | 'teacher';

@@ -18,6 +18,10 @@ app.use(express.json());
 // Audio cache for spoken words/prompts
 const audioCache = new Map<string, { audioBase64: string; mimeType: string }>();
 
+// Quota exhaustion circuit-breaker state
+let quotaCooldownUntil = 0;
+let quotaReason = '';
+
 // Helper to convert 16-bit 24kHz Mono PCM to standard playable WAV buffer
 function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
   const header = Buffer.alloc(44);
@@ -45,14 +49,17 @@ function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPe
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const isCoolingDown = Date.now() < quotaCooldownUntil;
   res.json({
     status: 'ok',
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    geminiQuotaCooldown: isCoolingDown,
+    retryAfterSeconds: isCoolingDown ? Math.max(0, Math.ceil((quotaCooldownUntil - Date.now()) / 1000)) : 0,
     time: new Date().toISOString()
   });
 });
 
-// Gemini TTS API Endpoint
+// Gemini TTS API Endpoint with automatic quota cooldown and fallback
 app.post('/api/tts', async (req, res) => {
   try {
     const { text, voiceName = 'Kore', style } = req.body;
@@ -76,49 +83,92 @@ app.post('/api/tts', async (req, res) => {
       });
     }
 
+    // Check circuit-breaker: if quota limit was hit previously, immediately return fallback
+    const now = Date.now();
+    if (now < quotaCooldownUntil) {
+      const remainingSec = Math.max(1, Math.ceil((quotaCooldownUntil - now) / 1000));
+      return res.json({
+        fallback: true,
+        source: 'browser-speech-fallback',
+        retryAfterSeconds: remainingSec,
+        message: quotaReason || 'Gemini TTS daily quota reached. Falling back to browser speech.'
+      });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(503).json({
-        error: 'GEMINI_API_KEY is not set on the server. Falling back to local synthesizer.',
-        fallback: true
+      return res.json({
+        fallback: true,
+        source: 'browser-speech-fallback',
+        message: 'GEMINI_API_KEY is not configured on the server. Using browser speech.'
       });
     }
 
     const ai = new GoogleGenAI({ apiKey });
     const promptStyle = style || 'Clear, deliberate, authoritative and dignified spelling bee moderator with pristine British English pronunciation';
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash-lite-tts',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: cleanText,
-              speechMetadata: {
-                style: promptStyle
+    // Helper to generate audio from a specified TTS model
+    const generateWithModel = async (modelName: string) => {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: cleanText,
+                speechMetadata: {
+                  style: promptStyle
+                }
               }
+            ]
+          }
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName }
             }
-          ]
-        }
-      ],
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName }
           }
         }
-      }
-    });
+      });
+    };
 
-    const candidate = response.candidates?.[0]?.content?.parts?.[0];
+    let response: any = null;
+    let usedModel = 'gemini-3.8-flash-lite-tts';
+
+    try {
+      response = await generateWithModel('gemini-3.8-flash-lite-tts');
+    } catch (liteErr: any) {
+      const isLiteQuota = liteErr?.status === 'RESOURCE_EXHAUSTED' ||
+        liteErr?.status === 429 ||
+        String(liteErr?.message || '').includes('429') ||
+        String(liteErr?.message || '').includes('Quota exceeded') ||
+        String(liteErr?.message || '').includes('RESOURCE_EXHAUSTED');
+
+      if (isLiteQuota) {
+        // Try fallback to standard flash-tts model
+        try {
+          usedModel = 'gemini-3.8-flash-tts';
+          response = await generateWithModel('gemini-3.8-flash-tts');
+        } catch (flashErr: any) {
+          // Both models hit quota or error
+          throw flashErr || liteErr;
+        }
+      } else {
+        throw liteErr;
+      }
+    }
+
+    const candidate = response?.candidates?.[0]?.content?.parts?.[0];
     const rawData = candidate?.inlineData?.data;
 
     if (!rawData) {
-      return res.status(502).json({
-        error: 'No audio returned from Gemini model',
-        fallback: true
+      return res.json({
+        fallback: true,
+        source: 'browser-speech-fallback',
+        message: 'No audio returned from Gemini model. Using browser speech.'
       });
     }
 
@@ -133,13 +183,41 @@ app.post('/api/tts', async (req, res) => {
       audioBase64: wavBase64,
       mimeType: 'audio/wav',
       voiceName,
-      source: 'gemini-3.8-flash-lite-tts'
+      source: usedModel
     });
   } catch (err: any) {
-    console.error('Error generating Gemini TTS:', err?.message || err);
-    return res.status(500).json({
-      error: err?.message || 'Failed to generate Gemini voice',
-      fallback: true
+    const isQuota = err?.status === 'RESOURCE_EXHAUSTED' ||
+      err?.status === 429 ||
+      String(err?.message || '').includes('429') ||
+      String(err?.message || '').includes('Quota exceeded') ||
+      String(err?.message || '').includes('RESOURCE_EXHAUSTED');
+
+    if (isQuota) {
+      let cooldownSeconds = 60;
+      const retryInfo = err?.details?.find((d: any) => d?.['@type']?.includes('RetryInfo'));
+      if (retryInfo?.retryDelay) {
+        const match = String(retryInfo.retryDelay).match(/(\d+)/);
+        if (match) {
+          cooldownSeconds = parseInt(match[1], 10) + 2;
+        }
+      }
+      quotaCooldownUntil = Date.now() + (cooldownSeconds * 1000);
+      quotaReason = `Gemini TTS free tier quota exceeded (${cooldownSeconds}s cooldown).`;
+      console.warn(`[Gemini TTS] Quota exceeded. Seamlessly activating browser speech fallback for ${cooldownSeconds}s.`);
+
+      return res.json({
+        fallback: true,
+        source: 'browser-speech-fallback',
+        retryAfterSeconds: cooldownSeconds,
+        message: quotaReason
+      });
+    }
+
+    console.warn('[Gemini TTS] Speech request could not be processed, using browser speech fallback:', err?.message || err);
+    return res.json({
+      fallback: true,
+      source: 'browser-speech-fallback',
+      message: err?.message || 'Voice generation unavailable, browser speech synthesis active'
     });
   }
 });

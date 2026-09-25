@@ -28,6 +28,8 @@ class VoiceService {
   private synth: SpeechSynthesis | null = null;
   private browserVoice: SpeechSynthesisVoice | null = null;
   private isMuted = false;
+  private geminiCooldownUntil = 0;
+  private statusMessage = '';
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -44,7 +46,9 @@ class VoiceService {
       const voices = this.synth?.getVoices() || [];
       const preferred = voices.find(v => 
         (v.lang.includes('en-GB') || v.lang.includes('en-NG') || v.lang.includes('en-US')) &&
-        v.name.includes('Google')
+        (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Premium'))
+      ) || voices.find(v => 
+        v.lang.includes('en-GB') || v.lang.includes('en-NG') || v.lang.includes('en-US')
       ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
       if (preferred) {
         this.browserVoice = preferred;
@@ -73,6 +77,15 @@ class VoiceService {
 
   public getIsMuted(): boolean {
     return this.isMuted;
+  }
+
+  public getEngineStatus(): { isGeminiLive: boolean; cooldownRemaining: number; voice: string } {
+    const isCoolingDown = Date.now() < this.geminiCooldownUntil;
+    return {
+      isGeminiLive: !isCoolingDown && this.isGeminiVoiceEnabled,
+      cooldownRemaining: isCoolingDown ? Math.max(0, Math.ceil((this.geminiCooldownUntil - Date.now()) / 1000)) : 0,
+      voice: this.selectedGeminiVoice
+    };
   }
 
   /**
@@ -110,8 +123,12 @@ class VoiceService {
     const voice = options.voiceName || this.selectedGeminiVoice;
     const cacheKey = `${voice}:${cleanText}`;
 
-    // Try Gemini TTS first if enabled
-    if (this.isGeminiVoiceEnabled && typeof window !== 'undefined') {
+    // Try Gemini TTS if enabled and not currently in quota cooldown
+    const isGeminiEligible = this.isGeminiVoiceEnabled && 
+      typeof window !== 'undefined' && 
+      Date.now() >= this.geminiCooldownUntil;
+
+    if (isGeminiEligible) {
       try {
         let audioSrc: string | null = null;
 
@@ -133,7 +150,15 @@ class VoiceService {
             if (data.audioBase64) {
               audioSrc = `data:audio/wav;base64,${data.audioBase64}`;
               this.audioCache.set(cacheKey, audioSrc);
+            } else if (data.fallback) {
+              // Respect server quota cooldown signal
+              const cooldownSec = typeof data.retryAfterSeconds === 'number' ? data.retryAfterSeconds : 60;
+              this.geminiCooldownUntil = Date.now() + (cooldownSec * 1000);
+              this.statusMessage = data.message || 'Gemini TTS in cooldown';
             }
+          } else {
+            // Non-200 response: set 60s cooldown to prevent repeated errors
+            this.geminiCooldownUntil = Date.now() + 60000;
           }
         }
 
@@ -142,11 +167,12 @@ class VoiceService {
           if (played) return true;
         }
       } catch (err) {
-        console.warn('Gemini TTS unavailable, falling back to Web Speech synthesis:', err);
+        this.geminiCooldownUntil = Date.now() + 60000;
+        console.warn('Gemini TTS unavailable, seamlessly using Web Speech synthesis.');
       }
     }
 
-    // Fallback: Web Speech API
+    // High quality browser fallback
     return this.speakWebSpeech(cleanText, options.speed || 0.88);
   }
 
@@ -181,20 +207,39 @@ class VoiceService {
         resolve(false);
         return;
       }
-      this.synth.cancel();
+      try {
+        this.synth.cancel();
+        if (this.synth.paused) {
+          this.synth.resume();
+        }
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = speed;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      if (this.browserVoice) {
-        utterance.voice = this.browserVoice;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = speed;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        if (this.browserVoice) {
+          utterance.voice = this.browserVoice;
+        }
+
+        let resolved = false;
+        const complete = (success: boolean) => {
+          if (!resolved) {
+            resolved = true;
+            resolve(success);
+          }
+        };
+
+        utterance.onend = () => complete(true);
+        utterance.onerror = () => complete(false);
+
+        // Failsafe timer so speech promises never block execution
+        const maxDurationMs = Math.max(3000, text.length * 120);
+        setTimeout(() => complete(true), maxDurationMs);
+
+        this.synth.speak(utterance);
+      } catch (e) {
+        resolve(false);
       }
-
-      utterance.onend = () => resolve(true);
-      utterance.onerror = () => resolve(false);
-
-      this.synth.speak(utterance);
     });
   }
 

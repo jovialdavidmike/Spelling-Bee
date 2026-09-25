@@ -1,217 +1,418 @@
-import { UserAccount, UserRole, AppView, EnrolledStudent } from '../types';
-import { INITIAL_ENROLLED_STUDENTS, INITIAL_SCHOOL_CONFIG } from '../data/mockData';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  onAuthStateChanged,
+  User as FirebaseUser
+} from 'firebase/auth';
+import { auth, validateFirestoreConnection } from './firebase';
+import { userService } from './userService';
+import { UserProfile, UserRole } from '../types/auth';
+import { getFriendlyAuthErrorMessage } from './authAuthorization';
+import { INITIAL_SCHOOL_CONFIG, INITIAL_ENROLLED_STUDENTS } from '../data/mockData';
 
-const AUTH_STORAGE_KEY = 'spellready_auth_account';
-
-export const DEMO_TEACHER: UserAccount = {
-  id: 'teacher_01',
-  role: 'teacher',
-  name: 'David Mike',
+export const DEMO_TEACHER_PROFILE: UserProfile = {
+  uid: 'usr_teacher_david',
+  id: 'usr_teacher_david',
   email: 'david.mike@fstc-yaba.edu.ng',
+  displayName: 'David Mike',
+  name: 'David Mike',
+  role: 'teacher',
+  accountStatus: 'active',
+  schoolId: 'sch_fstc_01',
   schoolName: INITIAL_SCHOOL_CONFIG.schoolName,
-  createdAt: '2026-08-15'
+  className: 'SS 1 Gold / JSS 3 Blue',
+  profileCompleted: true,
+  createdAt: '2026-08-15T08:00:00.000Z',
+  updatedAt: new Date().toISOString()
 };
 
-export const DEMO_STUDENT: UserAccount = {
-  id: 'std_01',
-  role: 'student',
+export const DEMO_STUDENT_PROFILE: UserProfile = {
+  uid: 'usr_student_amara',
+  id: 'usr_student_amara',
+  email: 'amara.okafor@student.spellready.ng',
+  displayName: 'Amara Okafor',
   name: 'Amara Okafor',
-  studentCode: 'CCA-SS1-001',
-  pin: '4827',
-  className: 'SS 1 Gold',
-  classId: 'class_ss1_gold',
+  role: 'student',
+  accountStatus: 'active',
+  schoolId: 'sch_fstc_01',
   schoolName: INITIAL_SCHOOL_CONFIG.schoolName,
-  createdAt: '2026-09-01'
+  classId: 'class_ss1_gold',
+  className: 'SS 1 Gold',
+  studentCode: 'CCA-SS1-001',
+  profileCompleted: true,
+  createdAt: '2026-09-01T08:00:00.000Z',
+  updatedAt: new Date().toISOString()
 };
 
-class AuthService {
-  private currentUser: UserAccount | null = null;
-  private listeners: Array<(user: UserAccount | null) => void> = [];
+export const DEMO_TEACHER = {
+  id: DEMO_TEACHER_PROFILE.uid,
+  name: DEMO_TEACHER_PROFILE.displayName,
+  email: DEMO_TEACHER_PROFILE.email || 'david.mike@fstc-yaba.edu.ng',
+  role: 'teacher' as UserRole,
+  schoolName: DEMO_TEACHER_PROFILE.schoolName,
+  createdAt: DEMO_TEACHER_PROFILE.createdAt
+};
+
+export const DEMO_STUDENT = {
+  id: DEMO_STUDENT_PROFILE.uid,
+  name: DEMO_STUDENT_PROFILE.displayName,
+  role: 'student' as UserRole,
+  studentCode: DEMO_STUDENT_PROFILE.studentCode,
+  className: DEMO_STUDENT_PROFILE.className,
+  schoolName: DEMO_STUDENT_PROFILE.schoolName,
+  createdAt: DEMO_STUDENT_PROFILE.createdAt
+};
+
+export class AuthService {
+  private currentProfile: UserProfile | null = null;
+  private firebaseUser: FirebaseUser | null = null;
+  private isInitializing: boolean = true;
+  private listeners: Array<(profile: UserProfile | null) => void> = [];
 
   constructor() {
-    this.loadFromStorage();
+    this.initAuthListener();
   }
 
-  private loadFromStorage() {
-    if (typeof window === 'undefined') return;
-    try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        this.currentUser = JSON.parse(stored);
+  private initAuthListener() {
+    // Validate firestore connection
+    validateFirestoreConnection().catch(() => {});
+
+    // Listen for real Firebase Auth state changes
+    onAuthStateChanged(auth, async (user) => {
+      this.firebaseUser = user;
+
+      if (user) {
+        try {
+          let profile = await userService.getUserProfile(user.uid);
+
+          if (!profile) {
+            // First time auth without firestore doc: create default user profile
+            const isTeacher = user.email?.includes('teacher') || user.email?.includes('coach') || false;
+            profile = {
+              uid: user.uid,
+              id: user.uid,
+              email: user.email || null,
+              displayName: user.displayName || user.email?.split('@')[0] || 'Speller',
+              name: user.displayName || user.email?.split('@')[0] || 'Speller',
+              role: isTeacher ? 'teacher' : 'student',
+              accountStatus: 'active',
+              schoolName: INITIAL_SCHOOL_CONFIG.schoolName,
+              profileCompleted: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastLoginAt: new Date().toISOString()
+            };
+            await userService.createUserProfile(profile);
+          } else {
+            // Sync aliases
+            profile.id = profile.uid;
+            profile.name = profile.displayName;
+            profile.avatarUrl = profile.photoURL;
+            await userService.updateUserProfile(user.uid, { lastLoginAt: new Date().toISOString() });
+          }
+
+          this.currentProfile = profile;
+        } catch (err) {
+          console.warn('Profile load note during auth change:', err);
+        }
       } else {
-        // Default to student user for seamless initial onboarding
-        this.currentUser = { ...DEMO_STUDENT };
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(this.currentUser));
+        // If no Firebase session is logged in, check if user was using a demo test profile
+        const cachedFallback = this.loadLocalProfile();
+        if (cachedFallback) {
+          cachedFallback.id = cachedFallback.uid;
+          cachedFallback.name = cachedFallback.displayName;
+          this.currentProfile = cachedFallback;
+        } else {
+          // Default to student profile for seamless initial preview
+          this.currentProfile = { ...DEMO_STUDENT_PROFILE };
+          this.persistLocalProfile(this.currentProfile);
+        }
       }
-    } catch {
-      this.currentUser = { ...DEMO_STUDENT };
-    }
+
+      this.isInitializing = false;
+      this.notify();
+    });
   }
 
-  private persist() {
-    if (typeof window === 'undefined') return;
-    try {
-      if (this.currentUser) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(this.currentUser));
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } catch (e) {
-      console.warn('Auth persist note:', e);
-    }
-    this.notify();
-  }
-
-  private notify() {
-    this.listeners.forEach(fn => fn(this.currentUser));
-  }
-
-  public subscribe(fn: (user: UserAccount | null) => void): () => void {
+  public subscribe(fn: (profile: UserProfile | null) => void): () => void {
     this.listeners.push(fn);
+    fn(this.currentProfile);
     return () => {
       this.listeners = this.listeners.filter(l => l !== fn);
     };
   }
 
-  public getCurrentUser(): UserAccount | null {
-    return this.currentUser;
+  private notify() {
+    this.listeners.forEach(fn => fn(this.currentProfile));
+  }
+
+  public getProfile(): UserProfile | null {
+    return this.currentProfile;
+  }
+
+  public getCurrentUser(): UserProfile | null {
+    return this.currentProfile;
   }
 
   public getRole(): UserRole {
-    return this.currentUser ? this.currentUser.role : 'guest';
+    return this.currentProfile ? this.currentProfile.role : 'guest';
   }
 
   public isAuthenticated(): boolean {
-    return this.currentUser !== null;
+    return this.currentProfile !== null;
+  }
+
+  public getIsInitializing(): boolean {
+    return this.isInitializing;
   }
 
   /**
-   * Student login via Student Code and optional PIN
+   * Real login with Firebase Email & Password
    */
-  public loginStudentWithCode(studentCode: string, pin?: string): { success: boolean; error?: string; user?: UserAccount } {
+  public async loginWithEmail(email: string, password: string): Promise<{ success: boolean; error?: string; profile?: UserProfile }> {
+    try {
+      const cleanEmail = email.trim();
+      const userCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      let profile = await userService.getUserProfile(userCred.user.uid);
+
+      if (!profile) {
+        profile = {
+          uid: userCred.user.uid,
+          id: userCred.user.uid,
+          email: userCred.user.email || cleanEmail,
+          displayName: userCred.user.displayName || cleanEmail.split('@')[0],
+          name: userCred.user.displayName || cleanEmail.split('@')[0],
+          role: cleanEmail.includes('teacher') ? 'teacher' : 'student',
+          accountStatus: 'active',
+          schoolName: INITIAL_SCHOOL_CONFIG.schoolName,
+          profileCompleted: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString()
+        };
+        await userService.createUserProfile(profile);
+      } else {
+        profile.id = profile.uid;
+        profile.name = profile.displayName;
+      }
+
+      this.currentProfile = profile;
+      this.persistLocalProfile(profile);
+      this.notify();
+      return { success: true, profile };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: getFriendlyAuthErrorMessage(err?.code || err?.message || '')
+      };
+    }
+  }
+
+  /**
+   * Real Registration with Firebase
+   */
+  public async registerUser(params: {
+    email: string;
+    password: string;
+    displayName: string;
+    role: UserRole;
+    schoolName?: string;
+    className?: string;
+    studentCode?: string;
+  }): Promise<{ success: boolean; error?: string; profile?: UserProfile }> {
+    try {
+      const cleanEmail = params.email.trim();
+      const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, params.password);
+
+      const newProfile: UserProfile = {
+        uid: userCred.user.uid,
+        id: userCred.user.uid,
+        email: cleanEmail,
+        displayName: params.displayName.trim() || cleanEmail.split('@')[0],
+        name: params.displayName.trim() || cleanEmail.split('@')[0],
+        role: params.role,
+        accountStatus: 'active',
+        schoolName: params.schoolName?.trim() || INITIAL_SCHOOL_CONFIG.schoolName,
+        className: params.className?.trim(),
+        studentCode: params.studentCode?.trim(),
+        profileCompleted: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
+
+      await userService.createUserProfile(newProfile);
+      this.currentProfile = newProfile;
+      this.persistLocalProfile(newProfile);
+      this.notify();
+
+      return { success: true, profile: newProfile };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: getFriendlyAuthErrorMessage(err?.code || err?.message || '')
+      };
+    }
+  }
+
+  /**
+   * Password Reset via Firebase
+   */
+  public async sendPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: getFriendlyAuthErrorMessage(err?.code || err?.message || '')
+      };
+    }
+  }
+
+  /**
+   * Student Login via School-Issued Code
+   */
+  public loginStudentWithCode(studentCode: string, pin?: string): { success: boolean; error?: string; profile?: UserProfile } {
     const codeClean = studentCode.trim().toUpperCase();
     const student = INITIAL_ENROLLED_STUDENTS.find(s => s.studentCode.toUpperCase() === codeClean);
 
     if (!student) {
-      return { success: false, error: `Student Code "${studentCode}" not found. Please check with your teacher.` };
+      return { success: false, error: `Student Code "${studentCode}" not found. Please verify with your teacher.` };
     }
 
     if (pin && student.pin && student.pin !== pin.trim()) {
       return { success: false, error: 'Incorrect PIN. Please re-enter your 4-digit code.' };
     }
 
-    const user: UserAccount = {
-      id: student.id,
-      role: 'student',
+    const profile: UserProfile = {
+      uid: `std_${student.id}`,
+      id: `std_${student.id}`,
+      email: `${student.studentCode.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.spellready.ng`,
+      displayName: student.name,
       name: student.name,
-      studentCode: student.studentCode,
-      pin: student.pin,
-      className: student.className,
-      classId: student.classId,
+      role: 'student',
+      accountStatus: 'active',
       schoolName: student.school,
-      createdAt: '2026-09-01'
+      classId: student.classId,
+      className: student.className,
+      studentCode: student.studentCode,
+      profileCompleted: true,
+      createdAt: '2026-09-01T08:00:00.000Z',
+      updatedAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
     };
 
-    this.currentUser = user;
-    this.persist();
-    return { success: true, user };
+    this.currentProfile = profile;
+    this.persistLocalProfile(profile);
+    this.notify();
+    return { success: true, profile };
   }
 
   /**
-   * Teacher login via email / password
+   * Fast Test Account Switcher (For Evaluation and Demos)
    */
-  public loginTeacher(emailOrUsername: string): { success: boolean; user: UserAccount } {
-    const user: UserAccount = {
-      ...DEMO_TEACHER,
-      email: emailOrUsername.includes('@') ? emailOrUsername : DEMO_TEACHER.email
-    };
-    this.currentUser = user;
-    this.persist();
-    return { success: true, user };
-  }
-
-  /**
-   * Switch between demo student / teacher for smooth evaluation
-   */
-  public switchRole(role: UserRole, studentId: string = 'std_01'): UserAccount | null {
+  public switchRole(role: UserRole, studentId: string = 'std_01'): UserProfile | null {
     if (role === 'guest') {
-      this.currentUser = null;
+      this.currentProfile = null;
     } else if (role === 'teacher') {
-      this.currentUser = { ...DEMO_TEACHER };
+      this.currentProfile = { ...DEMO_TEACHER_PROFILE };
+    } else if (role === 'admin') {
+      this.currentProfile = {
+        uid: 'usr_admin_spellready',
+        id: 'usr_admin_spellready',
+        email: 'admin@spellready.ng',
+        displayName: 'Platform Administrator',
+        name: 'Platform Administrator',
+        role: 'admin',
+        accountStatus: 'active',
+        schoolName: 'SpellReady National Consortium',
+        profileCompleted: true,
+        createdAt: '2026-07-01T08:00:00.000Z',
+        updatedAt: new Date().toISOString()
+      };
     } else {
       const match = INITIAL_ENROLLED_STUDENTS.find(s => s.id === studentId) || INITIAL_ENROLLED_STUDENTS[0];
-      this.currentUser = {
-        id: match.id,
-        role: 'student',
+      this.currentProfile = {
+        uid: `usr_${match.id}`,
+        id: `usr_${match.id}`,
+        email: `${match.studentCode.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.spellready.ng`,
+        displayName: match.name,
         name: match.name,
-        studentCode: match.studentCode,
-        pin: match.pin,
-        className: match.className,
-        classId: match.classId,
+        role: 'student',
+        accountStatus: 'active',
         schoolName: match.school,
-        createdAt: '2026-09-01'
+        classId: match.classId,
+        className: match.className,
+        studentCode: match.studentCode,
+        profileCompleted: true,
+        createdAt: '2026-09-01T08:00:00.000Z',
+        updatedAt: new Date().toISOString()
       };
     }
-    this.persist();
-    return this.currentUser;
+
+    this.persistLocalProfile(this.currentProfile);
+    this.notify();
+    return this.currentProfile;
   }
 
   /**
-   * Update student authorized settings
+   * Real Logout
    */
-  public updateStudentPreferences(updates: { avatarUrl?: string; name?: string }) {
-    if (this.currentUser && this.currentUser.role === 'student') {
-      this.currentUser = { ...this.currentUser, ...updates };
-      this.persist();
+  public async logout(): Promise<void> {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('SignOut note:', e);
     }
+    this.currentProfile = null;
+    this.persistLocalProfile(null);
+    this.notify();
   }
 
   /**
-   * Route guard check
+   * Update current profile in memory and database
    */
-  public canAccessView(view: AppView, role: UserRole): { allowed: boolean; fallbackView: AppView; reason?: string } {
-    const teacherOnlyViews: AppView[] = [
-      'teacher-dashboard',
-      'teacher-classes',
-      'teacher-students',
-      'teacher-student-detail',
-      'teacher-assign',
-      'teacher-word-sets',
-      'teacher-reports',
-      'teacher-competition',
-      'teacher-settings'
-    ];
+  public async updateProfile(updates: Partial<UserProfile>): Promise<void> {
+    if (!this.currentProfile) return;
+    const updated = {
+      ...this.currentProfile,
+      ...updates,
+      name: updates.displayName || this.currentProfile.displayName,
+      updatedAt: new Date().toISOString()
+    };
+    this.currentProfile = updated;
+    this.persistLocalProfile(updated);
+    this.notify();
 
-    const studentOnlyViews: AppView[] = [
-      'student-dashboard',
-      'practice-setup',
-      'practice',
-      'competition',
-      'mistakes',
-      'progress',
-      'achievements',
-      'leaderboard',
-      'student-profile',
-      'student-settings'
-    ];
-
-    if (teacherOnlyViews.includes(view) && role !== 'teacher') {
-      return {
-        allowed: false,
-        fallbackView: role === 'student' ? 'student-dashboard' : 'landing',
-        reason: 'Teacher administration authorization required.'
-      };
+    if (this.firebaseUser) {
+      await userService.updateUserProfile(this.firebaseUser.uid, updates);
     }
+  }
 
-    if (studentOnlyViews.includes(view) && role === 'guest') {
-      return {
-        allowed: false,
-        fallbackView: 'landing',
-        reason: 'Please sign in as a student to access practice and assignments.'
-      };
+  private persistLocalProfile(profile: UserProfile | null) {
+    if (typeof window === 'undefined') return;
+    try {
+      if (profile) {
+        localStorage.setItem('spellready_active_auth_profile', JSON.stringify(profile));
+      } else {
+        localStorage.removeItem('spellready_active_auth_profile');
+      }
+    } catch {
+      // ignore
     }
+  }
 
-    return { allowed: true, fallbackView: view };
+  private loadLocalProfile(): UserProfile | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = localStorage.getItem('spellready_active_auth_profile');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
   }
 }
 

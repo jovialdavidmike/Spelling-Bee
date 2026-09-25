@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView, UserRole, SessionSettings } from './types';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { AuthLoadingScreen } from './components/common/AuthLoadingScreen';
 import { TopBar } from './components/common/TopBar';
 import { Sidebar } from './components/common/Sidebar';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
@@ -14,7 +17,6 @@ import { CompetitionGuidePage } from './components/public/CompetitionGuidePage';
 import { StudentDashboard } from './components/student/StudentDashboard';
 import { PracticeSetupView } from './components/student/PracticeSetupView';
 import { PracticeSession } from './components/student/PracticeSession';
-import { CompetitionMode } from './components/student/CompetitionMode';
 import { WordLibrary } from './components/student/WordLibrary';
 import { MistakesReview } from './components/student/MistakesReview';
 import { StudentProgress } from './components/student/StudentProgress';
@@ -29,7 +31,6 @@ import { TeacherStudents } from './components/teacher/TeacherStudents';
 import { TeacherStudentDetail } from './components/teacher/TeacherStudentDetail';
 import { TeacherAssignPractice } from './components/teacher/TeacherAssignPractice';
 import { TeacherWordSets } from './components/teacher/TeacherWordSets';
-import { TeacherCompetitionRoom } from './components/teacher/TeacherCompetitionRoom';
 import { TeacherReports } from './components/teacher/TeacherReports';
 import { TeacherSettings } from './components/teacher/TeacherSettings';
 import { TeacherClasses } from './components/teacher/TeacherClasses';
@@ -40,9 +41,10 @@ import { CompetitionLiveSession } from './components/student/CompetitionLiveSess
 import { CompetitionsHub } from './components/common/CompetitionsHub';
 import { AuthModal } from './components/common/AuthModal';
 
-export default function App() {
+function AppContent() {
+  const { user, role, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('landing');
-  const [currentRole, setCurrentRole] = useState<UserRole>('guest');
+  const [currentRole, setCurrentRole] = useState<UserRole>(role);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [activeSessionSettings, setActiveSessionSettings] = useState<SessionSettings | undefined>(undefined);
   const [activeCustomWordIds, setActiveCustomWordIds] = useState<string[] | undefined>(undefined);
@@ -52,18 +54,23 @@ export default function App() {
   const [selectedCompetitionId, setSelectedCompetitionId] = useState<string | undefined>(undefined);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // Synchronize state with AuthProvider role
+  useEffect(() => {
+    setCurrentRole(role);
+  }, [role]);
+
   const handleNavigate = (view: AppView) => {
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleRoleChange = (role: UserRole) => {
-    setCurrentRole(role);
-    if (role === 'student' && currentView === 'landing') {
+  const handleRoleChange = (newRole: UserRole) => {
+    setCurrentRole(newRole);
+    if (newRole === 'student' && currentView === 'landing') {
       setCurrentView('student-dashboard');
-    } else if (role === 'teacher' && currentView === 'landing') {
+    } else if (newRole === 'teacher' && currentView === 'landing') {
       setCurrentView('teacher-dashboard');
-    } else if (role === 'guest') {
+    } else if (newRole === 'guest') {
       setCurrentView('landing');
     }
   };
@@ -109,6 +116,10 @@ export default function App() {
     handleLaunchPractice(settings, [wordId], 'Single Word Practice');
   };
 
+  if (isLoading) {
+    return <AuthLoadingScreen />;
+  }
+
   const renderCurrentView = () => {
     switch (currentView) {
       // Public Views
@@ -119,20 +130,24 @@ export default function App() {
       case 'competition-guide':
         return <CompetitionGuidePage onNavigate={handleNavigate} onRoleChange={handleRoleChange} />;
 
-      // Student Views
+      // Student Views (Protected)
       case 'student-dashboard':
         return (
-          <StudentDashboard
-            onNavigate={handleNavigate}
-            onLaunchPractice={handleLaunchPractice}
-          />
+          <ProtectedRoute allowedRoles={['student', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <StudentDashboard
+              onNavigate={handleNavigate}
+              onLaunchPractice={handleLaunchPractice}
+            />
+          </ProtectedRoute>
         );
       case 'practice-setup':
         return (
-          <PracticeSetupView
-            onNavigate={handleNavigate}
-            onLaunchSession={handleLaunchPractice}
-          />
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <PracticeSetupView
+              onNavigate={handleNavigate}
+              onLaunchSession={handleLaunchPractice}
+            />
+          </ProtectedRoute>
         );
       case 'practice':
         return (
@@ -155,16 +170,18 @@ export default function App() {
         );
       case 'competition-session':
         return (
-          <CompetitionLiveSession
-            competitionId={selectedCompetitionId}
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-            onLaunchPracticeMistakes={(wordIds) => {
-              setActiveCustomWordIds(wordIds);
-              setActiveSessionTitle('Remedial Practice: Competition Missed Words');
-              handleNavigate('practice');
-            }}
-          />
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <CompetitionLiveSession
+              competitionId={selectedCompetitionId}
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+              onLaunchPracticeMistakes={(wordIds) => {
+                setActiveCustomWordIds(wordIds);
+                setActiveSessionTitle('Remedial Practice: Competition Missed Words');
+                handleNavigate('practice');
+              }}
+            />
+          </ProtectedRoute>
         );
       case 'competition-results':
         return (
@@ -183,86 +200,150 @@ export default function App() {
         );
       case 'mistakes':
         return (
-          <MistakesReview
-            onNavigate={handleNavigate}
-            onLaunchPractice={handleLaunchPractice}
-          />
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <MistakesReview
+              onNavigate={handleNavigate}
+              onLaunchPractice={handleLaunchPractice}
+            />
+          </ProtectedRoute>
         );
       case 'progress':
-        return <StudentProgress onNavigate={handleNavigate} />;
+        return (
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <StudentProgress onNavigate={handleNavigate} />
+          </ProtectedRoute>
+        );
       case 'achievements':
-        return <AchievementsView onNavigate={handleNavigate} />;
+        return (
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <AchievementsView onNavigate={handleNavigate} />
+          </ProtectedRoute>
+        );
       case 'leaderboard':
         return <LeaderboardView onNavigate={handleNavigate} />;
       case 'student-profile':
-        return <StudentProfile onNavigate={handleNavigate} />;
+        return (
+          <ProtectedRoute allowedRoles={['student', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <StudentProfile onNavigate={handleNavigate} />
+          </ProtectedRoute>
+        );
       case 'student-settings':
-        return <StudentSettings onNavigate={handleNavigate} onShowToast={showToast} />;
+        return (
+          <ProtectedRoute currentView={currentView} onNavigate={handleNavigate}>
+            <StudentSettings onNavigate={handleNavigate} onShowToast={showToast} />
+          </ProtectedRoute>
+        );
 
-      // Teacher Views
+      // Teacher Views (Protected)
       case 'teacher-dashboard':
         return (
-          <TeacherDashboard
-            onNavigate={handleNavigate}
-            onSelectStudent={(id) => setSelectedStudentId(id)}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherDashboard
+              onNavigate={handleNavigate}
+              onSelectStudent={(id) => setSelectedStudentId(id)}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-students':
         return (
-          <TeacherStudents
-            onNavigate={handleNavigate}
-            onSelectStudent={(id) => setSelectedStudentId(id)}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherStudents
+              onNavigate={handleNavigate}
+              onSelectStudent={(id) => setSelectedStudentId(id)}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-student-detail':
         return (
-          <TeacherStudentDetail
-            studentId={selectedStudentId}
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherStudentDetail
+              studentId={selectedStudentId}
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-assign':
         return (
-          <TeacherAssignPractice
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherAssignPractice
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-word-sets':
         return (
-          <TeacherWordSets
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherWordSets
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-competition':
         return (
-          <TeacherCompetitionRoom
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <CompetitionsHub
+              currentRole={currentRole}
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+              onSelectCompetition={(id) => setSelectedCompetitionId(id)}
+            />
+          </ProtectedRoute>
+        );
+      case 'teacher-competition-builder':
+        return (
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherCompetitionBuilder
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
+        );
+      case 'teacher-competition-live':
+        return (
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherCompetitionLive
+              competitionId={selectedCompetitionId}
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
+        );
+      case 'teacher-competition-results':
+        return (
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherCompetitionResults
+              competitionId={selectedCompetitionId}
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-reports':
         return (
-          <TeacherReports
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherReports
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
       case 'teacher-settings':
         return (
-          <TeacherSettings
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherSettings onNavigate={handleNavigate} onShowToast={showToast} />
+          </ProtectedRoute>
         );
       case 'teacher-classes':
         return (
-          <TeacherClasses
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-          />
+          <ProtectedRoute allowedRoles={['teacher', 'admin']} currentView={currentView} onNavigate={handleNavigate}>
+            <TeacherClasses
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+            />
+          </ProtectedRoute>
         );
 
       default:
@@ -307,7 +388,7 @@ export default function App() {
         onNavigate={handleNavigate}
       />
 
-      {/* Auth & Role Switcher Modal */}
+      {/* Real Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -318,5 +399,13 @@ export default function App() {
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
