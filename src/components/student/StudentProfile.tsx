@@ -35,6 +35,12 @@ export const StudentProfile: React.FC<Props> = ({ onNavigate }) => {
   const [selectedAvatar, setSelectedAvatar] = useState(user?.photoURL || '🎓');
   const [savedNotice, setSavedNotice] = useState(false);
 
+  React.useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+  }, [user?.displayName]);
+
   const avatarOptions = ['🎓', '⭐', '🐝', '🏆', '📚', '🚀', '🎯', '🦅'];
 
   const handleCopyCode = (code: string) => {
@@ -45,8 +51,10 @@ export const StudentProfile: React.FC<Props> = ({ onNavigate }) => {
 
   const handleSavePreferences = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!displayName.trim()) return;
     await updateProfile({
       displayName: displayName.trim(),
+      name: displayName.trim(),
       photoURL: selectedAvatar
     });
     setIsEditingPreferences(false);
@@ -131,14 +139,16 @@ export const StudentProfile: React.FC<Props> = ({ onNavigate }) => {
             <h3 className="font-bold text-slate-900">Edit Display Preferences</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Display Name</label>
+                <label className="font-semibold text-slate-700">Full Name / Display Name</label>
                 <input
                   type="text"
                   required
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Enter your full name"
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
+                <p className="text-[11px] text-slate-400">This name appears on the teacher roster, competition leaderboards, and progress cards.</p>
               </div>
 
               <div className="space-y-1">

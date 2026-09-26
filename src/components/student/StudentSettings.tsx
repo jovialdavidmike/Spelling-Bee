@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView } from '../../types';
 import { dataService } from '../../services/dataService';
-import { Volume2, Sliders, Bell, Globe, Save, Check, RotateCcw, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Volume2, Sliders, Bell, Globe, Save, Check, RotateCcw, AlertTriangle, User, Edit3 } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -9,12 +10,35 @@ interface Props {
 }
 
 export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) => {
+  const { user, updateProfile } = useAuth();
+  const student = dataService.getStudent();
+  const [fullName, setFullName] = useState(user?.displayName || student.name);
+  const [nameSaved, setNameSaved] = useState(false);
+
+  useEffect(() => {
+    if (user?.displayName) {
+      setFullName(user.displayName);
+    }
+  }, [user?.displayName]);
+
   const [speechRate, setSpeechRate] = useState<'normal' | 'slower'>('normal');
   const [autoPronounce, setAutoPronounce] = useState(true);
   const [showDefinitionHints, setShowDefinitionHints] = useState(true);
   const [englishDialect, setEnglishDialect] = useState('British / WAEC Standard');
   const [timerAlerts, setTimerAlerts] = useState(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleUpdateName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) return;
+    await updateProfile({
+      displayName: fullName.trim(),
+      name: fullName.trim()
+    });
+    setNameSaved(true);
+    onShowToast('Your name has been updated successfully!');
+    setTimeout(() => setNameSaved(false), 2500);
+  };
 
   const handleSave = () => {
     onShowToast('Practice settings successfully saved.');
@@ -33,14 +57,55 @@ export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) =>
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-          Practice Preferences & Settings
+          Account & Practice Preferences
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Configure pronunciation speed, timer indicators, and practice ergonomics.
+          Manage your candidate identity, pronunciation speed, timer indicators, and practice ergonomics.
         </p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs divide-y divide-slate-100">
+        
+        {/* Speller Identity & Name */}
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <User className="w-4 h-4 text-amber-600" />
+              <span>Speller Identity & Name</span>
+            </div>
+            {nameSaved && (
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Saved
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleUpdateName} className="space-y-3 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-800">Your Full Name</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!fullName.trim() || fullName.trim() === (user?.displayName || student.name)}
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-slate-900 font-semibold rounded-xl text-xs transition-colors cursor-pointer shrink-0"
+                >
+                  Save Name
+                </button>
+              </div>
+              <p className="text-slate-500 text-[11px] mt-1">
+                This name appears across your student dashboard, teacher class roster, certificates, and weekly top spellers leaderboards.
+              </p>
+            </div>
+          </form>
+        </div>
         
         {/* Pronunciation & Voice Settings */}
         <div className="p-6 space-y-4">

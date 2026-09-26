@@ -386,22 +386,38 @@ export class AuthService {
   }
 
   /**
-   * Update current profile in memory and database
+   * Update current profile in memory, dataService and database
    */
   public async updateProfile(updates: Partial<UserProfile>): Promise<void> {
     if (!this.currentProfile) return;
-    const updated = {
+    const newName = updates.displayName ? updates.displayName.trim() : (updates.name ? updates.name.trim() : this.currentProfile.displayName);
+    const updated: UserProfile = {
       ...this.currentProfile,
       ...updates,
-      name: updates.displayName || this.currentProfile.displayName,
+      displayName: newName,
+      name: newName,
       updatedAt: new Date().toISOString()
     };
     this.currentProfile = updated;
     this.persistLocalProfile(updated);
     this.notify();
 
-    if (this.firebaseUser) {
-      await userService.updateUserProfile(this.firebaseUser.uid, updates);
+    // 1. Sync student name to dataService (updates active student + enrolledStudents roster)
+    dataService.updateStudentName(
+      { id: updated.id, studentCode: updated.studentCode, uid: updated.uid },
+      newName
+    );
+
+    // 2. Persist to Firestore / user cache via userService
+    const uidToUse = this.firebaseUser?.uid || updated.uid || (updated.id ? `std_${updated.id}` : undefined);
+    if (uidToUse) {
+      await userService.updateUserProfile(uidToUse, {
+        displayName: newName,
+        name: newName,
+        ...updates
+      }).catch(err => {
+        console.warn('Note updating Firestore profile:', err);
+      });
     }
   }
 

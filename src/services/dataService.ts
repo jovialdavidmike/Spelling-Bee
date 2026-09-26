@@ -132,12 +132,11 @@ class DataService {
       // 11. Enrolled Students
       const storedStudents = localStorage.getItem(STORAGE_KEYS.ENROLLED_STUDENTS);
       this.enrolledStudents = storedStudents ? JSON.parse(storedStudents) : [...INITIAL_ENROLLED_STUDENTS];
-      // Ensure the 5 test students exist in loaded data
-      const testStudents = INITIAL_ENROLLED_STUDENTS.filter(s => s.classId === 'class_ss_carer_starters_jss1_builders');
+      // Ensure all initial enrolled students (including test cohorts) exist in loaded data
       let studentsUpdated = false;
-      testStudents.forEach(ts => {
-        if (!this.enrolledStudents.some(s => s.studentCode.toUpperCase() === ts.studentCode.toUpperCase())) {
-          this.enrolledStudents.push({ ...ts });
+      INITIAL_ENROLLED_STUDENTS.forEach(initSt => {
+        if (!this.enrolledStudents.some(s => s.studentCode.toUpperCase() === initSt.studentCode.toUpperCase())) {
+          this.enrolledStudents.push({ ...initSt });
           studentsUpdated = true;
         }
       });
@@ -1083,7 +1082,7 @@ class DataService {
 
   public syncTestStudentProfiles(): void {
     const testStudents = this.enrolledStudents.filter(
-      s => s.classId === 'class_ss_carer_starters_jss1_builders'
+      s => s.classId === 'class_ss_carer_starters_jss1_builders' || s.id.startsWith('std_ss1_')
     );
     testStudents.forEach(ts => {
       const profile: UserProfile = {
@@ -1099,7 +1098,7 @@ class DataService {
         className: ts.className,
         studentCode: ts.studentCode,
         profileCompleted: true,
-        createdAt: '2026-09-01T08:00:00.000Z',
+        createdAt: ts.createdAt || '2026-09-01T08:00:00.000Z',
         updatedAt: new Date().toISOString()
       };
       userService.createUserProfile(profile).catch(() => {});
@@ -1233,12 +1232,40 @@ class DataService {
   }
 
   public updateEnrolledStudent(id: string, updates: Partial<EnrolledStudent>): EnrolledStudent | undefined {
-    const student = this.enrolledStudents.find(s => s.id === id);
+    const student = this.enrolledStudents.find(s => s.id === id || s.studentCode === id);
     if (student) {
       Object.assign(student, updates);
       this.persist(STORAGE_KEYS.ENROLLED_STUDENTS, this.enrolledStudents);
     }
     return student;
+  }
+
+  public updateStudentName(identifier: { id?: string; studentCode?: string; uid?: string }, newName: string): boolean {
+    const cleanName = newName.trim();
+    if (!cleanName) return false;
+
+    // 1. Update this.student
+    this.student.name = cleanName;
+    this.persist(STORAGE_KEYS.STUDENT, this.student);
+
+    // 2. Update enrolled students list
+    let matched = false;
+    const cleanUid = identifier.uid?.replace(/^usr_|^std_/, '');
+    const cleanId = identifier.id?.replace(/^usr_|^std_/, '');
+
+    const student = this.enrolledStudents.find(s => 
+      (identifier.studentCode && s.studentCode.toUpperCase() === identifier.studentCode.toUpperCase()) ||
+      (identifier.id && (s.id === identifier.id || s.id === cleanId)) ||
+      (cleanUid && s.id === cleanUid)
+    );
+
+    if (student) {
+      student.name = cleanName;
+      this.persist(STORAGE_KEYS.ENROLLED_STUDENTS, this.enrolledStudents);
+      matched = true;
+    }
+
+    return matched;
   }
 
   // --- TEACHER DATA & ASSIGNMENTS ---

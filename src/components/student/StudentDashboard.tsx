@@ -21,7 +21,8 @@ import {
   KeyRound,
   MessageSquare,
   Lock,
-  Share2
+  Share2,
+  Edit3
 } from 'lucide-react';
 import { DailyStreakCard } from './DailyStreakCard';
 import { ShareProgressModal } from './ShareProgressModal';
@@ -48,6 +49,8 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareModalMode, setShareModalMode] = useState<'all' | 'streak' | 'achievement'>('all');
+  const [isChangeNameOpen, setIsChangeNameOpen] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   // Student weak words
   const weakWordIds = enrolledStudent?.weakWords?.length
@@ -168,9 +171,22 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
               </>
             )}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-            {getGreetingTime()}, {currentUser?.name || student.name} 👋
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              {getGreetingTime()}, {currentUser?.name || student.name} 👋
+            </h1>
+            <button
+              onClick={() => {
+                setNameInput(currentUser?.name || student.name);
+                setIsChangeNameOpen(true);
+              }}
+              className="p-1.5 text-slate-400 hover:text-amber-700 hover:bg-amber-100/60 rounded-xl transition-colors cursor-pointer"
+              title="Change your name"
+              aria-label="Change your name"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          </div>
           <p className="text-sm text-slate-600 mt-1">
             "What should I do today?" — Complete your assigned work and review weak words to prepare for competition.
           </p>
@@ -666,6 +682,69 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
                   className="px-4 py-1.5 font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs"
                 >
                   Join Class
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CHANGE NAME MODAL */}
+      {isChangeNameOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-amber-600" />
+                <h3 className="font-bold text-slate-900 text-base">Change Your Name</h3>
+              </div>
+              <button
+                onClick={() => setIsChangeNameOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Update the name displayed on your dashboard, rankings, competition leaderboards, and teacher class rosters.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!nameInput.trim()) return;
+                await authService.updateProfile({ displayName: nameInput.trim() });
+                setIsChangeNameOpen(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700 text-xs">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangeNameOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!nameInput.trim()}
+                  className="px-5 py-2 text-xs font-semibold text-slate-900 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 rounded-xl transition-colors shadow-xs cursor-pointer"
+                >
+                  Save Name
                 </button>
               </div>
             </form>
