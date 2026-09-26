@@ -15,7 +15,12 @@ import {
   EnrolledStudent,
   AppNotification,
   SchoolConfig,
-  UserRole
+  UserRole,
+  StudentStreakData,
+  WeekDayStreak,
+  StreakMilestone,
+  WeeklyTopSpeller,
+  WeeklyLeaderboardMeta
 } from '../types';
 import {
   INITIAL_WORDS,
@@ -29,6 +34,8 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_SCHOOL_CONFIG
 } from '../data/mockData';
+import { userService } from './userService';
+import { UserProfile } from '../types/auth';
 
 const STORAGE_KEYS = {
   WORDS: 'spellready_words',
@@ -77,6 +84,10 @@ class DataService {
       // 2. Student
       const storedStudent = localStorage.getItem(STORAGE_KEYS.STUDENT);
       this.student = storedStudent ? JSON.parse(storedStudent) : { ...INITIAL_STUDENT };
+      if (!this.student.lastPracticeDate || !this.student.practiceHistoryDates) {
+        this.student.lastPracticeDate = this.student.lastPracticeDate || INITIAL_STUDENT.lastPracticeDate;
+        this.student.practiceHistoryDates = this.student.practiceHistoryDates || INITIAL_STUDENT.practiceHistoryDates;
+      }
 
       // 3. Sessions
       const storedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
@@ -111,10 +122,31 @@ class DataService {
       // 10. Classes
       const storedClasses = localStorage.getItem(STORAGE_KEYS.CLASSES);
       this.classes = storedClasses ? JSON.parse(storedClasses) : [...INITIAL_CLASSES];
+      // Ensure test class exists in loaded data
+      const testClass = INITIAL_CLASSES.find(c => c.id === 'class_ss_carer_starters_jss1_builders');
+      if (testClass && !this.classes.some(c => c.id === testClass.id)) {
+        this.classes.push({ ...testClass });
+        this.persist(STORAGE_KEYS.CLASSES, this.classes);
+      }
 
       // 11. Enrolled Students
       const storedStudents = localStorage.getItem(STORAGE_KEYS.ENROLLED_STUDENTS);
       this.enrolledStudents = storedStudents ? JSON.parse(storedStudents) : [...INITIAL_ENROLLED_STUDENTS];
+      // Ensure the 5 test students exist in loaded data
+      const testStudents = INITIAL_ENROLLED_STUDENTS.filter(s => s.classId === 'class_ss_carer_starters_jss1_builders');
+      let studentsUpdated = false;
+      testStudents.forEach(ts => {
+        if (!this.enrolledStudents.some(s => s.studentCode.toUpperCase() === ts.studentCode.toUpperCase())) {
+          this.enrolledStudents.push({ ...ts });
+          studentsUpdated = true;
+        }
+      });
+      if (studentsUpdated) {
+        this.persist(STORAGE_KEYS.ENROLLED_STUDENTS, this.enrolledStudents);
+      }
+
+      // Sync Firebase UserProfiles for test students
+      this.syncTestStudentProfiles();
 
       // 12. Notifications
       const storedNotifs = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
@@ -305,8 +337,206 @@ class DataService {
       }
     }
 
+    // Update daily practice streak
+    const sessionDate = session.completedAt ? session.completedAt.split('T')[0] : new Date().toISOString().split('T')[0];
+    this.recordPracticeDate(sessionDate);
+
     this.evaluateAchievements(session);
     this.persist(STORAGE_KEYS.STUDENT, this.student);
+  }
+
+  // --- DAILY STREAK TRACKING SYSTEM ---
+  public getStudentStreakData(): StudentStreakData {
+    const today = new Date().toISOString().split('T')[0];
+    const lastDate = this.student.lastPracticeDate;
+    
+    // Check if practiced today
+    const isPracticedToday = lastDate === today;
+
+    // Calculate effective current streak
+    let effectiveStreak = this.student.currentStreak || 0;
+    if (!isPracticedToday) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastDate !== yesterdayStr) {
+        // More than 1 day has passed without practice: streak is 0 until today's practice is completed
+        effectiveStreak = 0;
+      }
+    }
+
+    const longestStreak = Math.max(this.student.longestStreak || 0, effectiveStreak);
+    const historySet = new Set(this.student.practiceHistoryDates || []);
+    if (isPracticedToday) {
+      historySet.add(today);
+    }
+
+    // Generate Monday-Sunday of the current calendar week
+    const now = new Date();
+    const currentDayOfWeek = (now.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - currentDayOfWeek);
+
+    const weekDays: WeekDayStreak[] = [];
+    const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const fullNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const isToday = dateStr === today;
+      const isPast = dateStr < today;
+      const isPracticed = historySet.has(dateStr);
+
+      weekDays.push({
+        dayName: dayNames[i],
+        fullName: fullNames[i],
+        dateStr,
+        dayNumber: d.getDate(),
+        isToday,
+        isPast,
+        isPracticed
+      });
+    }
+
+    // Flame levels
+    let flameLevel: 'spark' | 'warm' | 'blazing' | 'inferno' | 'legendary' = 'spark';
+    if (effectiveStreak >= 14) flameLevel = 'legendary';
+    else if (effectiveStreak >= 7) flameLevel = 'inferno';
+    else if (effectiveStreak >= 3) flameLevel = 'blazing';
+    else if (effectiveStreak >= 1) flameLevel = 'warm';
+
+    // Milestones
+    const allMilestones: StreakMilestone[] = [
+      {
+        targetDays: 3,
+        title: '3-Day Starter Flame',
+        badge: '🥉 Bronze Ember',
+        daysRemaining: Math.max(0, 3 - effectiveStreak),
+        isUnlocked: effectiveStreak >= 3
+      },
+      {
+        targetDays: 7,
+        title: '7-Day Week Warrior',
+        badge: '🥈 Silver Blaze',
+        daysRemaining: Math.max(0, 7 - effectiveStreak),
+        isUnlocked: effectiveStreak >= 7
+      },
+      {
+        targetDays: 14,
+        title: '14-Day Champion Streak',
+        badge: '🥇 Golden Inferno',
+        daysRemaining: Math.max(0, 14 - effectiveStreak),
+        isUnlocked: effectiveStreak >= 14
+      },
+      {
+        targetDays: 30,
+        title: '30-Day Master of Consistency',
+        badge: '🏆 Diamond Phoenix',
+        daysRemaining: Math.max(0, 30 - effectiveStreak),
+        isUnlocked: effectiveStreak >= 30
+      },
+      {
+        targetDays: 50,
+        title: '50-Day National Legend',
+        badge: '👑 Legendary Crown',
+        daysRemaining: Math.max(0, 50 - effectiveStreak),
+        isUnlocked: effectiveStreak >= 50
+      }
+    ];
+
+    const nextMilestone = allMilestones.find(m => !m.isUnlocked) || allMilestones[allMilestones.length - 1];
+
+    let streakStatusMessage = '';
+    if (isPracticedToday) {
+      streakStatusMessage = `Flame is blazing! ${effectiveStreak} consecutive day${effectiveStreak === 1 ? '' : 's'} unbroken. You've completed practice today!`;
+    } else if (effectiveStreak > 0) {
+      streakStatusMessage = `Your ${effectiveStreak}-day streak is waiting! Complete any spelling drill today to keep your flame burning.`;
+    } else {
+      streakStatusMessage = 'Start your streak today! Complete any practice session to ignite your flame.';
+    }
+
+    return {
+      currentStreak: effectiveStreak,
+      longestStreak,
+      isPracticedToday,
+      lastPracticeDate: this.student.lastPracticeDate,
+      weekDays,
+      nextMilestone,
+      allMilestones,
+      streakStatusMessage,
+      flameLevel
+    };
+  }
+
+  public recordPracticeDate(dateStr?: string): { currentStreak: number; incremented: boolean; isNewMilestone: boolean } {
+    const today = dateStr || new Date().toISOString().split('T')[0];
+    const lastDate = this.student.lastPracticeDate;
+    let incremented = false;
+    let isNewMilestone = false;
+
+    if (!this.student.practiceHistoryDates) {
+      this.student.practiceHistoryDates = [];
+    }
+
+    if (lastDate === today) {
+      // Already practiced today, keep history active
+      if (!this.student.practiceHistoryDates.includes(today)) {
+        this.student.practiceHistoryDates.push(today);
+      }
+    } else {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastDate === yesterdayStr) {
+        // Practiced yesterday: increment streak
+        this.student.currentStreak = (this.student.currentStreak || 0) + 1;
+        incremented = true;
+      } else {
+        // Broken streak or first time practice
+        this.student.currentStreak = 1;
+        incremented = true;
+      }
+
+      if (this.student.currentStreak > (this.student.longestStreak || 0)) {
+        this.student.longestStreak = this.student.currentStreak;
+      }
+
+      this.student.lastPracticeDate = today;
+      if (!this.student.practiceHistoryDates.includes(today)) {
+        this.student.practiceHistoryDates.push(today);
+      }
+
+      // Check milestones
+      const milestones = [3, 7, 14, 30, 50];
+      if (milestones.includes(this.student.currentStreak)) {
+        isNewMilestone = true;
+        this.addNotification({
+          targetRole: 'student',
+          title: `🔥 ${this.student.currentStreak}-Day Practice Streak Achieved!`,
+          message: `Incredible dedication! You have achieved an unbroken ${this.student.currentStreak}-day practice streak.`,
+          type: 'achievement'
+        });
+      }
+    }
+
+    // Keep enrolled student in sync
+    const enrolled = this.enrolledStudents.find(s => s.id === this.student.id);
+    if (enrolled) {
+      enrolled.streakDays = this.student.currentStreak;
+      enrolled.lastActive = 'Just now';
+      this.persist(STORAGE_KEYS.ENROLLED_STUDENTS, this.enrolledStudents);
+    }
+
+    this.persist(STORAGE_KEYS.STUDENT, this.student);
+    return {
+      currentStreak: this.student.currentStreak,
+      incremented,
+      isNewMilestone
+    };
   }
 
   public getPracticeSessions(): PracticeSession[] {
@@ -435,6 +665,291 @@ class DataService {
     return this.leaderboard;
   }
 
+  // --- WEEKLY TOP SPELLERS (PRACTICE FREQUENCY + ACCURACY) ---
+  public getWeeklyTopSpellers(): {
+    spellers: WeeklyTopSpeller[];
+    currentUserSpeller: WeeklyTopSpeller;
+    currentUserRank: number;
+    meta: WeeklyLeaderboardMeta;
+  } {
+    const now = new Date();
+    // Monday of current calendar week
+    const currentDayOfWeek = (now.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - currentDayOfWeek);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const mondayStr = monday.toISOString().split('T')[0];
+    const sundayStr = sunday.toISOString().split('T')[0];
+
+    // Week Number of year
+    const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
+    const pastDaysOfYear = (now.getTime() - firstDayOfYear.getTime()) / 86400000;
+    const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+
+    // Time remaining until Sunday 23:59:59
+    const msRemaining = Math.max(0, sunday.getTime() - now.getTime());
+    const daysRemaining = Math.floor(msRemaining / (1000 * 60 * 60 * 24));
+    const hoursRemaining = Math.floor((msRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+    // Format week date range display e.g. "Sep 21 – Sep 27"
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const startStr = `${monthNames[monday.getMonth()]} ${monday.getDate()}`;
+    const endStr = `${monthNames[sunday.getMonth()]} ${sunday.getDate()}, ${sunday.getFullYear()}`;
+
+    // Calculate current student's actual current-week metrics
+    const thisWeekSessions = this.practiceSessions.filter(s => {
+      const date = (s.completedAt || s.startedAt || '').slice(0, 10);
+      return date >= mondayStr && date <= sundayStr;
+    });
+
+    const studentHistoryDates = this.student.practiceHistoryDates || [];
+    const activeDaysThisWeek = studentHistoryDates.filter(d => d >= mondayStr && d <= sundayStr).length;
+
+    let studentWeekSessionsCount = thisWeekSessions.length;
+    let studentWeekWordsDrilled = thisWeekSessions.reduce((sum, s) => sum + s.attempts.length, 0);
+    let studentWeekCorrect = thisWeekSessions.reduce((sum, s) => sum + s.correctCount, 0);
+
+    // If student has established streak days this week or practiced today, ensure realistic baseline
+    const effectiveStreakDays = Math.max(1, activeDaysThisWeek || (this.student.currentStreak > 0 ? Math.min(7, this.student.currentStreak) : 1));
+    if (studentWeekSessionsCount === 0) {
+      studentWeekSessionsCount = effectiveStreakDays;
+      studentWeekWordsDrilled = Math.max(this.student.todayWordsAttempted || 20, effectiveStreakDays * 22);
+      studentWeekCorrect = Math.round(studentWeekWordsDrilled * ((this.student.accuracy || 88) / 100));
+    } else {
+      studentWeekSessionsCount = Math.max(studentWeekSessionsCount, effectiveStreakDays);
+      studentWeekWordsDrilled = Math.max(studentWeekWordsDrilled, this.student.todayWordsAttempted || 25);
+    }
+
+    const studentWeekAccuracy = studentWeekWordsDrilled > 0
+      ? Math.round((studentWeekCorrect / studentWeekWordsDrilled) * 100)
+      : (this.student.accuracy || 88);
+
+    // Scoring formula directly rewards BOTH practice frequency (words & sessions) AND accuracy
+    // Score = (wordsDrilled * 8) + (accuracy% * 15) + (sessions * 45) + (activeStreakDays * 35)
+    const computeWeeklyScore = (words: number, acc: number, sessions: number, streak: number) => {
+      return Math.round((words * 8) + (acc * 15) + (sessions * 45) + (streak * 35));
+    };
+
+    const studentWeeklyScore = computeWeeklyScore(
+      studentWeekWordsDrilled,
+      studentWeekAccuracy,
+      studentWeekSessionsCount,
+      effectiveStreakDays
+    );
+
+    const currentUserSpeller: WeeklyTopSpeller = {
+      rank: 1,
+      id: this.student.id,
+      name: this.student.name,
+      school: this.student.school || 'Federal Science & Technical College, Yaba',
+      className: this.student.className || 'SS 1 Gold',
+      weeklyPracticeSessions: studentWeekSessionsCount,
+      weeklyWordsDrilled: studentWeekWordsDrilled,
+      weeklyAccuracy: studentWeekAccuracy,
+      weeklyStreakDays: effectiveStreakDays,
+      weeklyPoints: studentWeeklyScore,
+      isCurrentUser: true,
+      trend: 'up',
+      rankChange: 2
+    };
+
+    // Competing student cohort representing top secondary spellers across classes
+    const competitorPool: Omit<WeeklyTopSpeller, 'rank'>[] = [
+      {
+        id: 'std_02',
+        name: 'Daniel Eze',
+        school: 'King’s College, Lagos',
+        className: 'SS 2 Diamond',
+        weeklyPracticeSessions: 18,
+        weeklyWordsDrilled: 255,
+        weeklyAccuracy: 95,
+        weeklyStreakDays: 7,
+        weeklyPoints: computeWeeklyScore(255, 95, 18, 7),
+        trend: 'up',
+        rankChange: 1
+      },
+      {
+        id: 'std_04',
+        name: 'Zainab Musa',
+        school: 'Government Secondary School, Kaduna',
+        className: 'JSS 3 Blue',
+        weeklyPracticeSessions: 15,
+        weeklyWordsDrilled: 220,
+        weeklyAccuracy: 94,
+        weeklyStreakDays: 6,
+        weeklyPoints: computeWeeklyScore(220, 94, 15, 6),
+        trend: 'same',
+        rankChange: 0
+      },
+      {
+        id: 'std_03',
+        name: 'Chinedu Obi',
+        school: 'Loyola Jesuit College, Abuja',
+        className: 'SS 1 Silver',
+        weeklyPracticeSessions: 14,
+        weeklyWordsDrilled: 198,
+        weeklyAccuracy: 92,
+        weeklyStreakDays: 6,
+        weeklyPoints: computeWeeklyScore(198, 92, 14, 6),
+        trend: 'down',
+        rankChange: 1
+      },
+      {
+        id: 'std_05',
+        name: 'Samuel Adeyemi',
+        school: 'Vivian Fowler Memorial, Ikeja',
+        className: 'SS 1 Gold',
+        weeklyPracticeSessions: 13,
+        weeklyWordsDrilled: 185,
+        weeklyAccuracy: 91,
+        weeklyStreakDays: 5,
+        weeklyPoints: computeWeeklyScore(185, 91, 13, 5),
+        trend: 'up',
+        rankChange: 2
+      },
+      {
+        id: 'std_06',
+        name: 'Blessing Nwosu',
+        school: 'Dennis Memorial Grammar, Onitsha',
+        className: 'SS 2 Emerald',
+        weeklyPracticeSessions: 12,
+        weeklyWordsDrilled: 170,
+        weeklyAccuracy: 89,
+        weeklyStreakDays: 5,
+        weeklyPoints: computeWeeklyScore(170, 89, 12, 5),
+        trend: 'same',
+        rankChange: 0
+      },
+      {
+        id: 'std_07',
+        name: 'Fatima Aliyu',
+        school: 'Capital Science Academy, Kuje',
+        className: 'JSS 3 Ruby',
+        weeklyPracticeSessions: 11,
+        weeklyWordsDrilled: 155,
+        weeklyAccuracy: 88,
+        weeklyStreakDays: 5,
+        weeklyPoints: computeWeeklyScore(155, 88, 11, 5),
+        trend: 'down',
+        rankChange: 1
+      },
+      {
+        id: 'std_08',
+        name: 'Kenechukwu Umeh',
+        school: 'Graceland International, Port Harcourt',
+        className: 'SS 1 Gold',
+        weeklyPracticeSessions: 11,
+        weeklyWordsDrilled: 145,
+        weeklyAccuracy: 87,
+        weeklyStreakDays: 4,
+        weeklyPoints: computeWeeklyScore(145, 87, 11, 4),
+        trend: 'up',
+        rankChange: 1
+      },
+      {
+        id: 'std_09',
+        name: 'Maryam Abubakar',
+        school: 'Federal Government College, Kano',
+        className: 'JSS 3 Blue',
+        weeklyPracticeSessions: 10,
+        weeklyWordsDrilled: 138,
+        weeklyAccuracy: 85,
+        weeklyStreakDays: 4,
+        weeklyPoints: computeWeeklyScore(138, 85, 10, 4),
+        trend: 'new',
+        rankChange: 0
+      },
+      {
+        id: 'std_10',
+        name: 'David Adeleke',
+        school: 'Corona Secondary School, Agbara',
+        className: 'SS 2 Pearl',
+        weeklyPracticeSessions: 9,
+        weeklyWordsDrilled: 128,
+        weeklyAccuracy: 85,
+        weeklyStreakDays: 4,
+        weeklyPoints: computeWeeklyScore(128, 85, 9, 4),
+        trend: 'same',
+        rankChange: 0
+      },
+      {
+        id: 'std_11',
+        name: 'Aisha Bello',
+        school: 'Queen’s College, Yaba',
+        className: 'SS 1 Sapphire',
+        weeklyPracticeSessions: 9,
+        weeklyWordsDrilled: 120,
+        weeklyAccuracy: 84,
+        weeklyStreakDays: 3,
+        weeklyPoints: computeWeeklyScore(120, 84, 9, 3),
+        trend: 'down',
+        rankChange: 2
+      },
+      {
+        id: 'std_12',
+        name: 'Emmanuel Olatunji',
+        school: 'Igbobi College, Yaba',
+        className: 'JSS 3 Gold',
+        weeklyPracticeSessions: 8,
+        weeklyWordsDrilled: 112,
+        weeklyAccuracy: 82,
+        weeklyStreakDays: 3,
+        weeklyPoints: computeWeeklyScore(112, 82, 8, 3),
+        trend: 'same',
+        rankChange: 0
+      }
+    ];
+
+    // Combine current user with competitors (avoid duplicate IDs)
+    const combined = [
+      currentUserSpeller,
+      ...competitorPool.filter(c => c.id !== currentUserSpeller.id)
+    ];
+
+    // Sort by weeklyPoints descending
+    combined.sort((a, b) => b.weeklyPoints - a.weeklyPoints);
+
+    // Re-assign ranks 1..N and decorative badges
+    const rankedList: WeeklyTopSpeller[] = combined.map((speller, index) => {
+      const rank = index + 1;
+      let badge = undefined;
+      if (rank === 1) badge = '🥇 Weekly Champion';
+      else if (rank === 2) badge = '🥈 Silver Podium';
+      else if (rank === 3) badge = '🥉 Bronze Podium';
+      else if (rank <= 5) badge = '🔥 Top Driller';
+      else if (speller.weeklyAccuracy >= 93) badge = '🎯 Precision Ace';
+
+      return {
+        ...speller,
+        rank,
+        badge
+      };
+    });
+
+    const userSpellerInList = rankedList.find(s => s.id === currentUserSpeller.id) || currentUserSpeller;
+    const currentUserRank = userSpellerInList.rank;
+
+    return {
+      spellers: rankedList.slice(0, 10), // Top 10 spellers for the current week
+      currentUserSpeller: userSpellerInList,
+      currentUserRank,
+      meta: {
+        weekNumber,
+        startDate: startStr,
+        endDate: endStr,
+        daysRemaining,
+        hoursRemaining,
+        totalParticipants: 148,
+        lastUpdated: 'Live sync'
+      }
+    };
+  }
+
   // --- CLASSES MANAGEMENT ---
   public getClasses(includeArchived: boolean = false): ClassRoom[] {
     return includeArchived ? this.classes : this.classes.filter(c => !c.isArchived);
@@ -552,6 +1067,45 @@ class DataService {
     return this.enrolledStudents.find(s => s.id === id);
   }
 
+  public generateUniqueStudentCode(classCode: string = 'SSCS-JSS1'): string {
+    let seq = 1;
+    let candidate = `CCA-${classCode}-${String(seq).padStart(3, '0')}`;
+    while (this.enrolledStudents.some(s => s.studentCode.toUpperCase() === candidate.toUpperCase())) {
+      seq++;
+      candidate = `CCA-${classCode}-${String(seq).padStart(3, '0')}`;
+    }
+    return candidate;
+  }
+
+  public generateSecurePin(): string {
+    return String(Math.floor(1000 + Math.random() * 9000));
+  }
+
+  public syncTestStudentProfiles(): void {
+    const testStudents = this.enrolledStudents.filter(
+      s => s.classId === 'class_ss_carer_starters_jss1_builders'
+    );
+    testStudents.forEach(ts => {
+      const profile: UserProfile = {
+        uid: `std_${ts.id}`,
+        id: `std_${ts.id}`,
+        email: `${ts.studentCode.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.spellready.ng`,
+        displayName: ts.name,
+        name: ts.name,
+        role: 'student',
+        accountStatus: 'active',
+        schoolName: ts.school,
+        classId: ts.classId,
+        className: ts.className,
+        studentCode: ts.studentCode,
+        profileCompleted: true,
+        createdAt: '2026-09-01T08:00:00.000Z',
+        updatedAt: new Date().toISOString()
+      };
+      userService.createUserProfile(profile).catch(() => {});
+    });
+  }
+
   public addStudent(studentData: {
     name: string;
     classId: string;
@@ -562,8 +1116,8 @@ class DataService {
   }): EnrolledStudent {
     const matchedClass = this.classes.find(c => c.id === studentData.classId) || this.classes[0];
     const generatedCode = studentData.studentCode?.trim().toUpperCase() || 
-      `CCA-${matchedClass.code || 'SS1'}-${String(this.enrolledStudents.length + 1).padStart(3, '0')}`;
-    const generatedPin = studentData.pin?.trim() || String(Math.floor(1000 + Math.random() * 9000));
+      this.generateUniqueStudentCode(matchedClass.code || 'SS1');
+    const generatedPin = studentData.pin?.trim() || this.generateSecurePin();
 
     const newStudent: EnrolledStudent = {
       id: `std_${Date.now()}`,
@@ -591,6 +1145,25 @@ class DataService {
     // Update class student count
     matchedClass.studentCount += 1;
     this.persist(STORAGE_KEYS.CLASSES, this.classes);
+
+    // Sync UserProfile to Firebase
+    const profile: UserProfile = {
+      uid: `std_${newStudent.id}`,
+      id: `std_${newStudent.id}`,
+      email: `${newStudent.studentCode.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.spellready.ng`,
+      displayName: newStudent.name,
+      name: newStudent.name,
+      role: 'student',
+      accountStatus: 'active',
+      schoolName: newStudent.school,
+      classId: newStudent.classId,
+      className: newStudent.className,
+      studentCode: newStudent.studentCode,
+      profileCompleted: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    userService.createUserProfile(profile).catch(() => {});
 
     return newStudent;
   }

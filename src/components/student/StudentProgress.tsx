@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppView } from '../../types';
 import { dataService } from '../../services/dataService';
+import { authService } from '../../services/authService';
 import { DifficultyIndicator } from '../common/DifficultyIndicator';
 import { EmptyState } from '../common/EmptyState';
 import {
@@ -13,17 +14,25 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  Share2
 } from 'lucide-react';
+import { ShareProgressModal } from './ShareProgressModal';
 
 interface Props {
   onNavigate: (view: AppView) => void;
 }
 
 export const StudentProgress: React.FC<Props> = ({ onNavigate }) => {
+  const currentUser = authService.getCurrentUser();
   const student = dataService.getStudent();
+  const streakData = dataService.getStudentStreakData();
   const allAttempts = dataService.getAllAttempts();
   const sessions = dataService.getPracticeSessions();
+  const enrolledStudent = currentUser?.id ? dataService.getEnrolledStudentById(currentUser.id) : undefined;
+  const achievements = dataService.getAchievements();
+
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const totalAttempts = allAttempts.length;
   const uniqueWordIds = new Set(allAttempts.map(a => a.wordId));
@@ -63,12 +72,22 @@ export const StudentProgress: React.FC<Props> = ({ onNavigate }) => {
           </p>
         </div>
 
-        <button
-          onClick={() => onNavigate('practice-setup')}
-          className="px-4 py-2 text-xs font-semibold text-slate-900 bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors cursor-pointer shadow-xs self-start sm:self-auto"
-        >
-          Start Practice Drill
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-amber-300 rounded-xl transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+          >
+            <Share2 className="w-3.5 h-3.5 text-amber-600" />
+            <span>Share Progress</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('practice-setup')}
+            className="px-4 py-2 text-xs font-semibold text-slate-900 bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors cursor-pointer shadow-xs"
+          >
+            Start Practice Drill
+          </button>
+        </div>
       </div>
 
       {/* KPI Stats Row (Unique Words vs Attempts Distinction) */}
@@ -95,13 +114,20 @@ export const StudentProgress: React.FC<Props> = ({ onNavigate }) => {
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Practice Streak</div>
+          <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Practice Streak</span>
+            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+              streakData.isPracticedToday ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+            }`}>
+              {streakData.isPracticedToday ? 'Active ✓' : 'Practice Today'}
+            </span>
+          </div>
           <div className="text-3xl font-bold font-mono text-amber-600 mt-1 flex items-center gap-1.5">
-            <Flame className="w-6 h-6 fill-amber-500 text-amber-500" />
-            <span>{student.currentStreak}d</span>
+            <Flame className={`w-6 h-6 ${streakData.isPracticedToday ? 'fill-amber-500 text-amber-500 animate-pulse' : 'fill-amber-400 text-amber-400'}`} />
+            <span>{streakData.currentStreak}d</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            Longest record: {student.longestStreak} days
+            Longest record: {streakData.longestStreak} days
           </div>
         </div>
 
@@ -226,6 +252,20 @@ export const StudentProgress: React.FC<Props> = ({ onNavigate }) => {
           ))}
         </div>
       </div>
+
+      {/* SHARE PROGRESS MODAL */}
+      <ShareProgressModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        streakData={streakData}
+        studentName={currentUser?.name || student.name}
+        studentClass={currentUser?.className || student.className}
+        schoolName={currentUser?.schoolName || student.school}
+        accuracy={enrolledStudent?.accuracy ?? trueOverallAccuracy}
+        wordsMastered={enrolledStudent?.wordsMastered ?? student.wordsMastered}
+        achievements={achievements}
+        initialMode="all"
+      />
 
     </div>
   );

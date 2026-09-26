@@ -26,6 +26,7 @@ interface Props {
 export const StudentProfile: React.FC<Props> = ({ onNavigate }) => {
   const { user, updateProfile } = useAuth();
   const student = dataService.getStudent();
+  const streakData = dataService.getStudentStreakData();
   const achievements = dataService.getAchievements();
 
   const [copiedCode, setCopiedCode] = useState(false);
@@ -195,11 +196,11 @@ export const StudentProfile: React.FC<Props> = ({ onNavigate }) => {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
           <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-            <Flame className="w-4 h-4 text-amber-500" />
+            <Flame className={`w-4 h-4 ${streakData.isPracticedToday ? 'fill-amber-500 text-amber-500 animate-pulse' : 'text-amber-500'}`} />
             <span>Day Streak</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono mt-2">{student.currentStreak} Days</div>
-          <div className="text-[11px] text-slate-400 mt-1">Best: {student.longestStreak} days</div>
+          <div className="text-2xl font-bold text-slate-900 font-mono mt-2">{streakData.currentStreak} Days</div>
+          <div className="text-[11px] text-slate-400 mt-1">Best: {streakData.longestStreak} days</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">

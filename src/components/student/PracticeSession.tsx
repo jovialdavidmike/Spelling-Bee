@@ -12,6 +12,7 @@ import { validateSpelling } from '../../services/spellingEngine';
 import { voiceService } from '../../services/voiceService';
 import { AudioButton } from '../common/AudioButton';
 import { DifficultyIndicator } from '../common/DifficultyIndicator';
+import { VoiceSpellingInput } from '../common/VoiceSpellingInput';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -436,38 +437,29 @@ export const PracticeSession: React.FC<Props> = ({
 
           {/* Spelling Input Area (Before Submission) */}
           {!hasSubmitted ? (
-            <form onSubmit={handleSubmitAnswer} className="space-y-4">
-              <div>
-                <label htmlFor="student-spelling-input" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Type Your Spelling
-                </label>
-                <input
-                  id="student-spelling-input"
-                  ref={inputRef}
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  placeholder="Type the word here..."
-                  className="w-full px-4 py-3.5 text-base sm:text-lg font-mono text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 tracking-wide transition-all"
-                />
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
-                  <span>No auto-correct active</span>
-                  <span>Press <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px]">Enter</kbd> to submit</span>
-                </div>
-              </div>
+            <div className="space-y-4">
+              <VoiceSpellingInput
+                value={userInput}
+                onChange={setUserInput}
+                onSubmit={() => {
+                  if (userInput.trim() && !isSubmitting) {
+                    handleSubmitAnswer();
+                  }
+                }}
+                disabled={isSubmitting}
+                placeholder="Type or speak the word here..."
+              />
 
               <button
-                type="submit"
+                type="button"
+                onClick={() => handleSubmitAnswer()}
                 disabled={!userInput.trim() || isSubmitting}
-                className="w-full py-3.5 text-sm font-semibold text-slate-900 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-xs"
+                className="w-full py-3.5 text-sm font-semibold text-slate-900 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
               >
-                Submit Answer
+                <span>Submit Answer</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
-            </form>
+            </div>
           ) : (
             /* Post-Submission Feedback Area */
             <div className="space-y-5 animate-fadeIn">

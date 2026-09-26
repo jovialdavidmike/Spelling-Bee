@@ -17,6 +17,10 @@
         "studentCode": { "type": "string", "description": "Optional school-issued student identification code" },
         "photoURL": { "type": "string", "description": "Avatar or profile picture URL" },
         "profileCompleted": { "type": "boolean", "description": "Whether onboarding profile setup has finished" },
+        "currentStreak": { "type": "number", "description": "Current consecutive daily practice streak count" },
+        "longestStreak": { "type": "number", "description": "Longest consecutive daily practice streak achieved" },
+        "lastPracticeDate": { "type": "string", "description": "ISO date YYYY-MM-DD of most recent completed practice" },
+        "practiceHistoryDates": { "type": "array", "items": { "type": "string" }, "description": "Recent practice dates YYYY-MM-DD for weekly streak tracking" },
         "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
         "updatedAt": { "type": "string", "description": "ISO timestamp of last profile update" },
         "lastLoginAt": { "type": "string", "description": "ISO timestamp of last login" }

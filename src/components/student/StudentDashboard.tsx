@@ -20,8 +20,12 @@ import {
   AlertCircle,
   KeyRound,
   MessageSquare,
-  Lock
+  Lock,
+  Share2
 } from 'lucide-react';
+import { DailyStreakCard } from './DailyStreakCard';
+import { ShareProgressModal } from './ShareProgressModal';
+import { WeeklyTopSpellersDashboardWidget } from './WeeklyTopSpellersDashboardWidget';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -31,14 +35,19 @@ interface Props {
 export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice }) => {
   const currentUser = authService.getCurrentUser();
   const student = dataService.getStudent();
+  const streakData = dataService.getStudentStreakData();
   const words = dataService.getWords();
   const assignments = dataService.getAssignments();
   const recentSessions = dataService.getPracticeSessions().slice(0, 3);
   const enrolledStudent = currentUser?.id ? dataService.getEnrolledStudentById(currentUser.id) : undefined;
+  const achievements = dataService.getAchievements();
+  const weeklyData = dataService.getWeeklyTopSpellers();
 
   const [isJoinCodeOpen, setIsJoinCodeOpen] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalMode, setShareModalMode] = useState<'all' | 'streak' | 'achievement'>('all');
 
   // Student weak words
   const weakWordIds = enrolledStudent?.weakWords?.length
@@ -169,6 +178,18 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
+            onClick={() => {
+              setShareModalMode('all');
+              setIsShareModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 text-xs font-semibold text-slate-800 bg-amber-50/60 hover:bg-amber-100/70 border border-amber-300 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs group"
+            title="Share your streak and latest achievements on social media"
+          >
+            <Share2 className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+            <span>Share Progress</span>
+          </button>
+
+          <button
             onClick={() => setIsJoinCodeOpen(true)}
             className="px-3.5 py-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
@@ -185,6 +206,16 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
           </button>
         </div>
       </div>
+
+      {/* Dedicated Daily Streak Tracking System */}
+      <DailyStreakCard
+        streakData={streakData}
+        onStartPractice={handleStartTodayPractice}
+        onShareStreak={() => {
+          setShareModalMode('streak');
+          setIsShareModalOpen(true);
+        }}
+      />
 
       {/* Primary Progress Metrics Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -208,14 +239,38 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium mb-1">Practice Streak</div>
-          <div className="text-3xl font-bold text-amber-600 font-mono flex items-center gap-1.5">
-            <Flame className="w-6 h-6 fill-amber-500 text-amber-500" />
-            <span>{enrolledStudent?.streakDays ?? student.currentStreak} <span className="text-sm font-normal text-slate-500">days</span></span>
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs relative overflow-hidden group">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1">
+            <span>Daily Streak</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setShareModalMode('streak');
+                  setIsShareModalOpen(true);
+                }}
+                className="text-slate-400 hover:text-amber-600 p-0.5 rounded transition-colors cursor-pointer"
+                title="Share Streak"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </button>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                  streakData.isPracticedToday
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                }`}
+              >
+                {streakData.isPracticedToday ? 'Active ✓' : 'Practice Today'}
+              </span>
+            </div>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            Longest: {student.longestStreak} days
+          <div className="text-3xl font-bold text-amber-600 font-mono flex items-center gap-1.5">
+            <Flame className={`w-7 h-7 ${streakData.isPracticedToday ? 'fill-amber-500 text-amber-500 animate-pulse' : 'fill-amber-400 text-amber-400'}`} />
+            <span>{streakData.currentStreak} <span className="text-sm font-normal text-slate-500">days</span></span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+            <span>Best: {streakData.longestStreak} days</span>
+            <span className="text-amber-700 font-semibold">{streakData.nextMilestone.badge.split(' ')[0]}</span>
           </div>
         </div>
 
@@ -229,6 +284,16 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
           </div>
         </div>
       </div>
+
+      {/* WEEKLY TOP SPELLERS COMPETITIVE DASHBOARD WIDGET */}
+      <WeeklyTopSpellersDashboardWidget
+        spellers={weeklyData.spellers}
+        currentUserSpeller={weeklyData.currentUserSpeller}
+        currentUserRank={weeklyData.currentUserRank}
+        meta={weeklyData.meta}
+        onNavigate={onNavigate}
+        onStartPractice={handleStartTodayPractice}
+      />
 
       {/* ASSIGNED WORK SECTION */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
@@ -394,6 +459,94 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
 
       </div>
 
+      {/* LATEST UNLOCKED ACHIEVEMENTS & SOCIAL SHARE SHOWCASE */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-orange-50/30 p-6 rounded-2xl border border-amber-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center font-bold">
+              🏆
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>Latest Achievements & Milestones</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  {achievements.filter(a => a.unlocked).length} Unlocked
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-600">
+                Celebrate your spelling mastery and share your progress on social media
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setShareModalMode('achievement');
+                setIsShareModalOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share Achievements</span>
+            </button>
+
+            <button
+              onClick={() => onNavigate('achievements')}
+              className="text-xs font-semibold text-amber-800 hover:text-amber-900 px-2 py-1 cursor-pointer"
+            >
+              All Badges →
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {achievements
+            .filter(a => a.unlocked)
+            .slice(0, 3)
+            .map((ach) => (
+              <div
+                key={ach.id}
+                className="p-3.5 rounded-xl bg-white/90 border border-amber-200/80 hover:border-amber-300 transition-all flex flex-col justify-between space-y-2 shadow-2xs"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 text-xs flex items-center justify-center font-bold shrink-0">
+                      ★
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs leading-tight line-clamp-1">{ach.title}</h4>
+                      <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Unlocked
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShareModalMode('achievement');
+                      setIsShareModalOpen(true);
+                    }}
+                    className="text-slate-400 hover:text-amber-600 p-1 rounded transition-colors cursor-pointer"
+                    title={`Share "${ach.title}"`}
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                  {ach.description}
+                </p>
+
+                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>{ach.unlockedAt ? `Unlocked ${ach.unlockedAt}` : 'Achieved'}</span>
+                  <span className="font-mono text-amber-700 font-semibold">{ach.progressLabel}</span>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
       {/* QUICK ACTIONS GRID */}
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Independent Training Modes</h2>
@@ -433,6 +586,31 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
             <BookOpen className="w-5 h-5 text-emerald-600 mb-2 group-hover:scale-110 transition-transform" />
             <div className="text-sm font-bold text-slate-900">Word Library</div>
             <div className="text-xs text-slate-600 mt-0.5">Explore {words.length} words</div>
+          </button>
+
+          <button
+            onClick={() => onNavigate('weekly-top-spellers')}
+            className="p-4 rounded-xl bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-300 hover:border-amber-400 text-left transition-colors cursor-pointer group col-span-2 sm:col-span-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center font-bold">
+                  🏆
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>Weekly Top Spellers Competition</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-900">
+                      Rank #{weeklyData.currentUserRank}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    See where you stand among the top 10 secondary students based on frequency and accuracy this week
+                  </div>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-amber-600 group-hover:translate-x-1 transition-transform hidden sm:block" />
+            </div>
           </button>
 
         </div>
@@ -494,6 +672,20 @@ export const StudentDashboard: React.FC<Props> = ({ onNavigate, onLaunchPractice
           </div>
         </div>
       )}
+
+      {/* SHARE PROGRESS MODAL */}
+      <ShareProgressModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        streakData={streakData}
+        studentName={currentUser?.name || student.name}
+        studentClass={studentClassName}
+        schoolName={currentUser?.schoolName || student.school}
+        accuracy={enrolledStudent?.accuracy ?? student.accuracy}
+        wordsMastered={enrolledStudent?.wordsMastered ?? student.wordsMastered}
+        achievements={achievements}
+        initialMode={shareModalMode}
+      />
 
     </div>
   );

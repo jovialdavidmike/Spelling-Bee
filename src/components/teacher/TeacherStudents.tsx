@@ -339,7 +339,7 @@ export const TeacherStudents: React.FC<Props> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <span className="font-bold text-slate-900 text-sm block">{student.name}</span>
-                  <span className="font-mono text-[11px] text-slate-400">{student.studentCode}</span>
+                  <span className="font-mono text-[11px] text-slate-400">{student.studentCode} · PIN: {student.pin}</span>
                 </div>
                 <div className="text-right">
                   <span className={`font-mono font-bold text-sm block ${student.accuracy >= 85 ? 'text-emerald-700' : 'text-amber-600'}`}>

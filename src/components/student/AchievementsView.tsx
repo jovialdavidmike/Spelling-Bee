@@ -1,14 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppView } from '../../types';
 import { dataService } from '../../services/dataService';
-import { Award, Lock, CheckCircle2, Zap, Trophy, Flame, Target } from 'lucide-react';
+import { authService } from '../../services/authService';
+import { Award, Lock, CheckCircle2, Zap, Trophy, Flame, Target, Share2 } from 'lucide-react';
+import { ShareProgressModal } from './ShareProgressModal';
 
 interface Props {
   onNavigate: (view: AppView) => void;
 }
 
 export const AchievementsView: React.FC<Props> = ({ onNavigate }) => {
+  const currentUser = authService.getCurrentUser();
+  const student = dataService.getStudent();
+  const streakData = dataService.getStudentStreakData();
+  const enrolledStudent = currentUser?.id ? dataService.getEnrolledStudentById(currentUser.id) : undefined;
   const achievements = dataService.getAchievements();
+
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [selectedAchId, setSelectedAchId] = useState<string | undefined>(undefined);
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
@@ -19,6 +28,11 @@ export const AchievementsView: React.FC<Props> = ({ onNavigate }) => {
       case 'competition': return Trophy;
       default: return Zap;
     }
+  };
+
+  const handleShareAchievement = (achId?: string) => {
+    setSelectedAchId(achId);
+    setIsShareModalOpen(true);
   };
 
   return (
@@ -35,8 +49,18 @@ export const AchievementsView: React.FC<Props> = ({ onNavigate }) => {
           </p>
         </div>
 
-        <div className="text-xs font-mono font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-          {unlockedCount} of {achievements.length} Unlocked
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-mono font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+            {unlockedCount} of {achievements.length} Unlocked
+          </div>
+
+          <button
+            onClick={() => handleShareAchievement(undefined)}
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share Badges</span>
+          </button>
         </div>
       </div>
 
@@ -65,13 +89,24 @@ export const AchievementsView: React.FC<Props> = ({ onNavigate }) => {
                     {ach.unlocked ? <Icon className="w-5 h-5" /> : <Lock className="w-4 h-4" />}
                   </div>
 
-                  <span
-                    className={`text-[11px] font-semibold ${
-                      ach.unlocked ? 'text-emerald-700' : 'text-slate-400'
-                    }`}
-                  >
-                    {ach.unlocked ? '✓ Unlocked' : 'In Progress'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[11px] font-semibold ${
+                        ach.unlocked ? 'text-emerald-700' : 'text-slate-400'
+                      }`}
+                    >
+                      {ach.unlocked ? '✓ Unlocked' : 'In Progress'}
+                    </span>
+                    {ach.unlocked && (
+                      <button
+                        onClick={() => handleShareAchievement(ach.id)}
+                        className="text-slate-400 hover:text-amber-600 p-1 rounded transition-colors cursor-pointer"
+                        title={`Share ${ach.title}`}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -104,6 +139,20 @@ export const AchievementsView: React.FC<Props> = ({ onNavigate }) => {
           );
         })}
       </div>
+
+      {/* Share Progress Modal */}
+      <ShareProgressModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        streakData={streakData}
+        studentName={currentUser?.name || student.name}
+        studentClass={currentUser?.className || student.className}
+        schoolName={currentUser?.schoolName || student.school}
+        accuracy={enrolledStudent?.accuracy ?? student.accuracy}
+        wordsMastered={enrolledStudent?.wordsMastered ?? student.wordsMastered}
+        achievements={achievements}
+        initialMode="achievement"
+      />
 
     </div>
   );

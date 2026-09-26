@@ -752,6 +752,17 @@ export const INITIAL_WORDS: Word[] = [
   }
 ];
 
+export const getRecentPracticeDates = (count: number): string[] => {
+  const dates: string[] = [];
+  const now = new Date();
+  for (let i = count; i >= 1; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+};
+
 export const INITIAL_STUDENT: Student = {
   id: 'std_01',
   name: 'Amara Okafor',
@@ -770,7 +781,9 @@ export const INITIAL_STUDENT: Student = {
   recentMistakes: ['w6', 'w12', 'w16', 'w20'],
   savedWords: ['w11', 'w24', 'w27'],
   dailyGoal: 20,
-  todayWordsAttempted: 8
+  todayWordsAttempted: 8,
+  lastPracticeDate: new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
+  practiceHistoryDates: getRecentPracticeDates(7)
 };
 
 export const INITIAL_ACHIEVEMENTS: Achievement[] = [
@@ -1007,6 +1020,21 @@ export const INITIAL_CLASSES: ClassRoom[] = [
     isArchived: false,
     createdAt: '2026-09-05',
     updatedAt: '2026-09-24'
+  },
+  {
+    id: 'class_ss_carer_starters_jss1_builders',
+    name: 'SS carer starters and jss1 builders',
+    code: 'SSCS-JSS1',
+    description: 'Senior Secondary & Junior Secondary 1 Foundation & Starters Cohort',
+    schoolName: 'Federal Science & Technical College, Yaba',
+    academicSession: '2026/2027',
+    joinCode: '5B9X2K',
+    studentCount: 5,
+    averageAccuracy: 88,
+    completionRate: 90,
+    isArchived: false,
+    createdAt: '2026-09-01',
+    updatedAt: '2026-09-26'
   }
 ];
 
@@ -1158,6 +1186,91 @@ export const INITIAL_ENROLLED_STUDENTS: EnrolledStudent[] = [
     status: 'On Track',
     level: 'Intermediate',
     notes: 'Steady speller with strong performance on Greek derivations.'
+  },
+  {
+    id: 'std_csjb_01',
+    name: 'Amara Okafor',
+    studentCode: 'CCA-SSCS-JSS1-001',
+    pin: '5832',
+    className: 'SS carer starters and jss1 builders',
+    classId: 'class_ss_carer_starters_jss1_builders',
+    school: 'Federal Science & Technical College, Yaba',
+    wordsPracticed: 120,
+    wordsMastered: 82,
+    accuracy: 88,
+    streakDays: 5,
+    lastActive: 'Just registered',
+    status: 'On Track',
+    level: 'Foundation',
+    notes: 'Enrolled under SS carer starters and jss1 builders test class.'
+  },
+  {
+    id: 'std_csjb_02',
+    name: 'Chidi Obi',
+    studentCode: 'CCA-SSCS-JSS1-002',
+    pin: '7194',
+    className: 'SS carer starters and jss1 builders',
+    classId: 'class_ss_carer_starters_jss1_builders',
+    school: 'Federal Science & Technical College, Yaba',
+    wordsPracticed: 115,
+    wordsMastered: 79,
+    accuracy: 86,
+    streakDays: 4,
+    lastActive: 'Just registered',
+    status: 'On Track',
+    level: 'Foundation',
+    notes: 'Enrolled under SS carer starters and jss1 builders test class.'
+  },
+  {
+    id: 'std_csjb_03',
+    name: 'Daniel Musa',
+    studentCode: 'CCA-SSCS-JSS1-003',
+    pin: '4629',
+    className: 'SS carer starters and jss1 builders',
+    classId: 'class_ss_carer_starters_jss1_builders',
+    school: 'Federal Science & Technical College, Yaba',
+    wordsPracticed: 140,
+    wordsMastered: 95,
+    accuracy: 90,
+    streakDays: 6,
+    lastActive: 'Just registered',
+    status: 'On Track',
+    level: 'Intermediate',
+    notes: 'Enrolled under SS carer starters and jss1 builders test class.'
+  },
+  {
+    id: 'std_csjb_04',
+    name: 'Grace Eze',
+    studentCode: 'CCA-SSCS-JSS1-004',
+    pin: '8351',
+    className: 'SS carer starters and jss1 builders',
+    classId: 'class_ss_carer_starters_jss1_builders',
+    school: 'Federal Science & Technical College, Yaba',
+    wordsPracticed: 130,
+    wordsMastered: 88,
+    accuracy: 89,
+    streakDays: 5,
+    lastActive: 'Just registered',
+    status: 'On Track',
+    level: 'Foundation',
+    notes: 'Enrolled under SS carer starters and jss1 builders test class.'
+  },
+  {
+    id: 'std_csjb_05',
+    name: 'Michael Yusuf',
+    studentCode: 'CCA-SSCS-JSS1-005',
+    pin: '2947',
+    className: 'SS carer starters and jss1 builders',
+    classId: 'class_ss_carer_starters_jss1_builders',
+    school: 'Federal Science & Technical College, Yaba',
+    wordsPracticed: 125,
+    wordsMastered: 84,
+    accuracy: 87,
+    streakDays: 4,
+    lastActive: 'Just registered',
+    status: 'On Track',
+    level: 'Foundation',
+    notes: 'Enrolled under SS carer starters and jss1 builders test class.'
   }
 ];
 

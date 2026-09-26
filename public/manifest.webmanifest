@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "SpellReady - Spelling Bee Practice Platform",
+  "short_name": "SpellReady",
+  "description": "An independent spelling bee practice and competition preparation platform for secondary school students in Nigeria.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#d97706",
+  "background_color": "#F8FAFC",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["education", "kids", "books"]
+}

@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth, validateFirestoreConnection } from './firebase';
 import { userService } from './userService';
+import { dataService } from './dataService';
 import { UserProfile, UserRole } from '../types/auth';
 import { getFriendlyAuthErrorMessage } from './authAuthorization';
 import { INITIAL_SCHOOL_CONFIG, INITIAL_ENROLLED_STUDENTS } from '../data/mockData';
@@ -277,13 +278,15 @@ export class AuthService {
    */
   public loginStudentWithCode(studentCode: string, pin?: string): { success: boolean; error?: string; profile?: UserProfile } {
     const codeClean = studentCode.trim().toUpperCase();
-    const student = INITIAL_ENROLLED_STUDENTS.find(s => s.studentCode.toUpperCase() === codeClean);
+    const allStudents = dataService.getTeacherStudents();
+    const student = allStudents.find(s => s.studentCode.toUpperCase() === codeClean) ||
+                    INITIAL_ENROLLED_STUDENTS.find(s => s.studentCode.toUpperCase() === codeClean);
 
     if (!student) {
       return { success: false, error: `Student Code "${studentCode}" not found. Please verify with your teacher.` };
     }
 
-    if (pin && student.pin && student.pin !== pin.trim()) {
+    if (pin && student.pin && student.pin.trim() !== pin.trim()) {
       return { success: false, error: 'Incorrect PIN. Please re-enter your 4-digit code.' };
     }
 
@@ -300,7 +303,7 @@ export class AuthService {
       className: student.className,
       studentCode: student.studentCode,
       profileCompleted: true,
-      createdAt: '2026-09-01T08:00:00.000Z',
+      createdAt: student.createdAt || '2026-09-01T08:00:00.000Z',
       updatedAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString()
     };
@@ -308,6 +311,12 @@ export class AuthService {
     this.currentProfile = profile;
     this.persistLocalProfile(profile);
     this.notify();
+
+    // Sync profile to Firestore
+    userService.createUserProfile(profile).catch(err => {
+      console.warn('Sync note during student code login:', err);
+    });
+
     return { success: true, profile };
   }
 
@@ -334,7 +343,11 @@ export class AuthService {
         updatedAt: new Date().toISOString()
       };
     } else {
-      const match = INITIAL_ENROLLED_STUDENTS.find(s => s.id === studentId) || INITIAL_ENROLLED_STUDENTS[0];
+      const allStudents = dataService.getTeacherStudents();
+      const match = allStudents.find(s => s.id === studentId) ||
+                    INITIAL_ENROLLED_STUDENTS.find(s => s.id === studentId) ||
+                    allStudents[0] ||
+                    INITIAL_ENROLLED_STUDENTS[0];
       this.currentProfile = {
         uid: `usr_${match.id}`,
         id: `usr_${match.id}`,
@@ -348,7 +361,7 @@ export class AuthService {
         className: match.className,
         studentCode: match.studentCode,
         profileCompleted: true,
-        createdAt: '2026-09-01T08:00:00.000Z',
+        createdAt: match.createdAt || '2026-09-01T08:00:00.000Z',
         updatedAt: new Date().toISOString()
       };
     }

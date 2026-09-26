@@ -48,6 +48,32 @@ export const LeaderboardView: React.FC<Props> = ({ onNavigate }) => {
         </div>
       </div>
 
+      {/* Weekly Top Spellers Banner Callout */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-orange-50/30 p-4 rounded-2xl border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center font-bold shrink-0">
+            🏆
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+              <span>Weekly Top Spellers Competition is Live!</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500 text-slate-900">NEW</span>
+            </h3>
+            <p className="text-slate-600 text-xs">
+              Compete for the top 10 positions this week based on practice frequency and spelling accuracy.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onNavigate('weekly-top-spellers')}
+          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto"
+        >
+          <Trophy className="w-3.5 h-3.5 fill-slate-900" />
+          <span>View Weekly Top 10</span>
+        </button>
+      </div>
+
       {/* Privacy Notice Card */}
       <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-xs text-slate-600 flex items-center gap-2.5">
         <ShieldAlert className="w-4 h-4 text-slate-500 shrink-0" />

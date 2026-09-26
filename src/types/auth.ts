@@ -24,6 +24,11 @@ export interface UserProfile {
   // Voice preferences attached to authenticated identity
   preferredVoice?: string;
   voiceRate?: number;
+  // Daily Streak tracking properties
+  currentStreak?: number;
+  longestStreak?: number;
+  lastPracticeDate?: string;
+  practiceHistoryDates?: string[];
 }
 
 export type AuthState = 

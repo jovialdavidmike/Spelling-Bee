@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0f172a" />
+  <circle cx="256" cy="256" r="180" fill="#f59e0b" fill-opacity="0.15" />
+  <!-- Honeycomb pattern accent -->
+  <path d="M256 80 L340 128 L340 224 L256 272 L172 224 L172 128 Z" stroke="#f59e0b" stroke-width="8" fill="none" opacity="0.4" />
+  <!-- Open Book Base -->
+  <path d="M140 370 Q256 330 372 370 L372 390 Q256 350 140 390 Z" fill="#d97706" />
+  <path d="M148 360 Q256 322 364 360 L364 375 Q256 337 148 375 Z" fill="#fbbf24" />
+  <!-- Bee Body -->
+  <path d="M256 170 C210 170 185 210 185 250 C185 300 256 340 256 340 C256 340 327 300 327 250 C327 210 302 170 256 170 Z" fill="#fbbf24" stroke="#d97706" stroke-width="8" />
+  <!-- Bee Stripes -->
+  <path d="M196 235 H316" stroke="#1e293b" stroke-width="12" stroke-linecap="round" />
+  <path d="M206 270 H306" stroke="#1e293b" stroke-width="12" stroke-linecap="round" />
+  <path d="M220 305 H292" stroke="#1e293b" stroke-width="10" stroke-linecap="round" />
+  <!-- Bee Wings -->
+  <ellipse cx="200" cy="170" rx="38" ry="55" transform="rotate(-28 200 170)" fill="#e2e8f0" fill-opacity="0.85" stroke="#94a3b8" stroke-width="5" />
+  <ellipse cx="312" cy="170" rx="38" ry="55" transform="rotate(28 312 170)" fill="#e2e8f0" fill-opacity="0.85" stroke="#94a3b8" stroke-width="5" />
+  <!-- Bee Antennae -->
+  <path d="M236 170 Q215 130 195 135" stroke="#1e293b" stroke-width="6" stroke-linecap="round" fill="none" />
+  <circle cx="195" cy="135" r="7" fill="#f59e0b" />
+  <path d="M276 170 Q297 130 317 135" stroke="#1e293b" stroke-width="6" stroke-linecap="round" fill="none" />
+  <circle cx="317" cy="135" r="7" fill="#f59e0b" />
+  <!-- Sparkles -->
+  <polygon points="256,95 262,112 278,118 262,124 256,140 250,124 234,118 250,112" fill="#fef3c7" />
+  <polygon points="380,210 384,222 396,226 384,230 380,242 376,230 364,226 376,222" fill="#fef3c7" />
+</svg>

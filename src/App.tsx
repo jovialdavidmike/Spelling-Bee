@@ -22,6 +22,7 @@ import { MistakesReview } from './components/student/MistakesReview';
 import { StudentProgress } from './components/student/StudentProgress';
 import { AchievementsView } from './components/student/AchievementsView';
 import { LeaderboardView } from './components/student/LeaderboardView';
+import { WeeklyTopSpellersView } from './components/student/WeeklyTopSpellersView';
 import { StudentProfile } from './components/student/StudentProfile';
 import { StudentSettings } from './components/student/StudentSettings';
 
@@ -221,6 +222,12 @@ function AppContent() {
         );
       case 'leaderboard':
         return <LeaderboardView onNavigate={handleNavigate} />;
+      case 'weekly-top-spellers':
+        return (
+          <ProtectedRoute allowedRoles={['student', 'admin', 'teacher']} currentView={currentView} onNavigate={handleNavigate}>
+            <WeeklyTopSpellersView onNavigate={handleNavigate} onLaunchPractice={handleLaunchPractice} />
+          </ProtectedRoute>
+        );
       case 'student-profile':
         return (
           <ProtectedRoute allowedRoles={['student', 'admin']} currentView={currentView} onNavigate={handleNavigate}>

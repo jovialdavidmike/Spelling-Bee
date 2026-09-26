@@ -16,7 +16,8 @@ import {
   BarChart3,
   Flame,
   Volume2,
-  School
+  School,
+  Medal
 } from 'lucide-react';
 
 interface Props {
@@ -48,6 +49,7 @@ export const Sidebar: React.FC<Props> = ({
     { id: 'progress', label: 'Progress & Stats', icon: TrendingUp },
     { id: 'achievements', label: 'Achievements', icon: Award },
     { id: 'leaderboard', label: 'Leaderboard', icon: Users },
+    { id: 'weekly-top-spellers', label: 'Weekly Top Spellers', icon: Medal },
     { id: 'student-profile', label: 'Student Profile', icon: User },
     { id: 'student-settings', label: 'Settings', icon: Settings },
   ];

@@ -183,6 +183,38 @@ export interface Student {
   savedWords?: string[]; // word IDs saved for later
   dailyGoal: number; // e.g. 20 words
   todayWordsAttempted: number;
+  lastPracticeDate?: string;
+  practiceHistoryDates?: string[];
+}
+
+export interface WeekDayStreak {
+  dayName: string;
+  fullName: string;
+  dateStr: string;
+  dayNumber: number;
+  isToday: boolean;
+  isPast: boolean;
+  isPracticed: boolean;
+}
+
+export interface StreakMilestone {
+  targetDays: number;
+  title: string;
+  badge: string;
+  daysRemaining: number;
+  isUnlocked: boolean;
+}
+
+export interface StudentStreakData {
+  currentStreak: number;
+  longestStreak: number;
+  isPracticedToday: boolean;
+  lastPracticeDate?: string;
+  weekDays: WeekDayStreak[];
+  nextMilestone: StreakMilestone;
+  allMilestones: StreakMilestone[];
+  streakStatusMessage: string;
+  flameLevel: 'spark' | 'warm' | 'blazing' | 'inferno' | 'legendary';
 }
 
 export interface Achievement {
@@ -207,6 +239,34 @@ export interface LeaderboardEntry {
   streakDays: number;
   points: number;
   badge?: string;
+}
+
+export interface WeeklyTopSpeller {
+  rank: number;
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  school: string;
+  className: string;
+  weeklyPracticeSessions: number; // practice frequency (sessions)
+  weeklyWordsDrilled: number;    // practice frequency (words)
+  weeklyAccuracy: number;        // accuracy %
+  weeklyStreakDays: number;      // days practiced this week
+  weeklyPoints: number;          // composite score
+  badge?: string;                // e.g. 🥇 Weekly Leader, 🥈 Silver Podium, etc.
+  isCurrentUser?: boolean;
+  trend: 'up' | 'down' | 'same' | 'new';
+  rankChange?: number;
+}
+
+export interface WeeklyLeaderboardMeta {
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  totalParticipants: number;
+  lastUpdated: string;
 }
 
 export interface TeacherAssignment {
@@ -306,6 +366,7 @@ export interface EnrolledStudent {
   notes?: string;
   parentContact?: string;
   weakWords?: string[];
+  createdAt?: string;
 }
 
 export interface UserAccount {
@@ -385,6 +446,7 @@ export type AppView =
   | 'progress'
   | 'achievements'
   | 'leaderboard'
+  | 'weekly-top-spellers'
   | 'student-profile'
   | 'student-settings'
   // Teacher

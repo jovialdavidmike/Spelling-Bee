@@ -4,6 +4,7 @@ import { competitionService } from '../../services/competitionService';
 import { voiceService } from '../../services/voiceService';
 import { authService } from '../../services/authService';
 import { dataService } from '../../services/dataService';
+import { VoiceSpellingInput } from '../common/VoiceSpellingInput';
 import {
   Trophy,
   Volume2,
@@ -528,38 +529,33 @@ export const CompetitionLiveSession: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Input Form with Anti-Cheat attributes */}
-            <form onSubmit={handleSubmit} className="max-w-md mx-auto space-y-4">
-              <div className="relative">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  disabled={isSubmitting || secondsRemaining <= 0}
-                  placeholder="Type your spelling here..."
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  onPaste={(e) => {
-                    if (competition?.settings.preventCopyPaste) {
-                      e.preventDefault();
-                      onShowToast('Copy/Paste is disabled during competition heats.', 'info');
-                    }
-                  }}
-                  className="w-full text-center text-xl sm:text-2xl font-bold tracking-wider py-4 px-6 bg-slate-50 border-2 border-slate-300 focus:border-indigo-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner transition-all disabled:opacity-50"
-                />
-              </div>
+            {/* Input Form with Anti-Cheat attributes and Voice Podium support */}
+            <div className="max-w-md mx-auto space-y-4">
+              <VoiceSpellingInput
+                value={userInput}
+                onChange={setUserInput}
+                onSubmit={() => {
+                  if (userInput.trim() && !isSubmitting && secondsRemaining > 0) {
+                    handleSubmit();
+                  }
+                }}
+                disabled={isSubmitting || secondsRemaining <= 0}
+                placeholder="Type or speak spelling..."
+                preventCopyPaste={!!competition?.settings.preventCopyPaste}
+                onPastePrevented={() => {
+                  onShowToast('Copy/Paste is disabled during competition heats.', 'info');
+                }}
+              />
 
               <button
-                type="submit"
-                disabled={isSubmitting || !userInput.trim()}
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting || !userInput.trim() || secondsRemaining <= 0}
                 className="w-full py-4 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold text-base shadow-md shadow-indigo-600/25 transition-all transform active:scale-98 cursor-pointer disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Confirming...' : 'Submit Spelling'}
               </button>
-            </form>
+            </div>
 
             {/* Immediate feedback banner if permitted */}
             {stage === 'word_feedback' && lastSubmissionResult && (
