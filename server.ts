@@ -172,9 +172,14 @@ app.post('/api/tts', async (req, res) => {
       });
     }
 
-    // Convert raw PCM to WAV
-    const rawPcm = Buffer.from(rawData, 'base64');
-    const wavBuffer = pcmToWav(rawPcm, 24000, 1, 16);
+    // Check if Gemini returned an already-formatted RIFF WAV file or raw PCM
+    const rawBuffer = Buffer.from(rawData, 'base64');
+    let wavBuffer: Buffer;
+    if (rawBuffer.length >= 4 && rawBuffer.subarray(0, 4).toString('ascii') === 'RIFF') {
+      wavBuffer = rawBuffer;
+    } else {
+      wavBuffer = pcmToWav(rawBuffer, 24000, 1, 16);
+    }
     const wavBase64 = wavBuffer.toString('base64');
 
     audioCache.set(cacheKey, { audioBase64: wavBase64, mimeType: 'audio/wav' });

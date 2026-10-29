@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { AppView } from '../../types';
 import { dataService } from '../../services/dataService';
 import { useAuth } from '../../context/AuthContext';
-import { Volume2, Sliders, Bell, Globe, Save, Check, RotateCcw, AlertTriangle, User, Edit3 } from 'lucide-react';
+import { Volume2, Sliders, Bell, Globe, Save, Check, RotateCcw, AlertTriangle, User, Edit3, Sparkles, Play, Headphones } from 'lucide-react';
+import { voiceService, GeminiVoiceName, VoiceOption } from '../../services/voiceService';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -14,6 +15,19 @@ export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) =>
   const student = dataService.getStudent();
   const [fullName, setFullName] = useState(user?.displayName || student.name);
   const [nameSaved, setNameSaved] = useState(false);
+  const [isPlayingTest, setIsPlayingTest] = useState(false);
+  const [selectedGeminiVoice, setSelectedGeminiVoice] = useState<GeminiVoiceName>(voiceService.getGeminiVoice());
+  const [availableBrowserVoices, setAvailableBrowserVoices] = useState<VoiceOption[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
+
+  useEffect(() => {
+    // Load available natural browser voices
+    const voices = voiceService.getAvailableVoices();
+    setAvailableBrowserVoices(voices);
+    if (voices.length > 0) {
+      setSelectedVoiceURI(voices[0].id);
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.displayName) {
@@ -109,13 +123,88 @@ export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) =>
         
         {/* Pronunciation & Voice Settings */}
         <div className="p-6 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-            <Volume2 className="w-4 h-4 text-amber-600" />
-            <span>Audio & Voice Enunciation</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Volume2 className="w-4 h-4 text-amber-600" />
+              <span>Audio & Pronunciation Engine</span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Sparkles className="w-3 h-3 text-emerald-600" />
+              Natural Voice Enabled
+            </span>
           </div>
 
-          <div className="space-y-3 text-xs">
+          <p className="text-xs text-slate-500">
+            SpellReady uses studio-quality human pronunciation and natural British/Commonwealth phonetics optimized for secondary school spelling competitions.
+          </p>
+
+          {/* Voice Preview & Live Tester */}
+          <div className="p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-3">
             <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Headphones className="w-4 h-4 text-amber-700" />
+                <span className="text-xs font-semibold text-amber-950">Test Pronunciation Quality</span>
+              </div>
+              <button
+                type="button"
+                disabled={isPlayingTest}
+                onClick={async () => {
+                  setIsPlayingTest(true);
+                  try {
+                    await voiceService.playWord('Rendezvous', speechRate === 'slower' ? 0.65 : 0.86);
+                    await new Promise(r => setTimeout(r, 400));
+                    await voiceService.speakSentence('The students agreed on a designated rendezvous point outside the hall.');
+                  } finally {
+                    setIsPlayingTest(false);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-900 text-xs font-semibold rounded-lg shadow-xs transition-all cursor-pointer disabled:opacity-60"
+              >
+                <Play className="w-3 h-3 fill-current" />
+                <span>{isPlayingTest ? 'Speaking...' : 'Listen to Sample'}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-900/80">
+              Hear authentic human cadence: &ldquo;Rendezvous... Example: The students agreed on a designated rendezvous point outside the hall.&rdquo;
+            </p>
+          </div>
+
+          <div className="space-y-4 text-xs">
+            {/* Moderator Voice Profile */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-800">Primary Moderator Voice Profile</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { id: 'Kore', label: 'Kore (Articulate British Female)', desc: 'Clear & Dignified' },
+                  { id: 'Puck', label: 'Puck (Engaging Energetic Male)', desc: 'Warm & Friendly' },
+                  { id: 'Fenrir', label: 'Fenrir (Resonant Authoritative Male)', desc: 'Classic Adjudicator' },
+                  { id: 'Zephyr', label: 'Zephyr (Calm Gentle Moderator)', desc: 'Patient & Steady' },
+                  { id: 'Charon', label: 'Charon (Deep Resonant Bee Master)', desc: 'Prestigious Podium' },
+                ].map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => {
+                      const vName = v.id as GeminiVoiceName;
+                      setSelectedGeminiVoice(vName);
+                      voiceService.setGeminiVoice(vName);
+                      onShowToast(`Announcer voice changed to ${v.label}`);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      selectedGeminiVoice === v.id
+                        ? 'border-amber-500 bg-amber-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="font-semibold text-slate-900 text-[11px] truncate">{v.id}</div>
+                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{v.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Default Speech Pace */}
+            <div className="flex items-center justify-between pt-1">
               <div>
                 <label className="font-semibold text-slate-800">Default Speech Pace</label>
                 <p className="text-slate-500">Pace of audio playback when reading target spelling words.</p>
@@ -126,7 +215,7 @@ export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) =>
                   onClick={() => setSpeechRate('normal')}
                   className={`px-3 py-1 rounded font-medium cursor-pointer ${speechRate === 'normal' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}
                 >
-                  Normal (0.85x)
+                  Natural (0.86x)
                 </button>
                 <button
                   type="button"
@@ -138,7 +227,8 @@ export const StudentSettings: React.FC<Props> = ({ onNavigate, onShowToast }) =>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            {/* Auto-play Pronunciation */}
+            <div className="flex items-center justify-between pt-1">
               <div>
                 <label className="font-semibold text-slate-800">Auto-play Pronunciation on Question</label>
                 <p className="text-slate-500">Automatically speak target word when each question loads.</p>

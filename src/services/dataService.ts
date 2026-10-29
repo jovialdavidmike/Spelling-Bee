@@ -77,9 +77,25 @@ class DataService {
     if (typeof window === 'undefined') return;
 
     try {
-      // 1. Words
+      // 1. Words (Merge newly added curriculum words so all 85 words are present)
       const storedWords = localStorage.getItem(STORAGE_KEYS.WORDS);
-      this.words = storedWords ? JSON.parse(storedWords) : [...INITIAL_WORDS];
+      if (storedWords) {
+        try {
+          const loaded: Word[] = JSON.parse(storedWords);
+          const existingIds = new Set(loaded.map(w => w.id));
+          const newWords = INITIAL_WORDS.filter(w => !existingIds.has(w.id));
+          if (newWords.length > 0) {
+            this.words = [...loaded, ...newWords];
+            localStorage.setItem(STORAGE_KEYS.WORDS, JSON.stringify(this.words));
+          } else {
+            this.words = loaded;
+          }
+        } catch {
+          this.words = [...INITIAL_WORDS];
+        }
+      } else {
+        this.words = [...INITIAL_WORDS];
+      }
 
       // 2. Student
       const storedStudent = localStorage.getItem(STORAGE_KEYS.STUDENT);
@@ -109,9 +125,20 @@ class DataService {
       const storedSubs = localStorage.getItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS);
       this.assignmentSubmissions = storedSubs ? JSON.parse(storedSubs) : [];
 
-      // 8. Word Sets
+      // 8. Word Sets (Merge newly added sets like ws_5)
       const storedSets = localStorage.getItem(STORAGE_KEYS.WORD_SETS);
-      this.wordSets = storedSets ? JSON.parse(storedSets) : [...INITIAL_WORD_SETS];
+      if (storedSets) {
+        try {
+          const loadedSets: WordSet[] = JSON.parse(storedSets);
+          const existingSetIds = new Set(loadedSets.map(s => s.id));
+          const newSets = INITIAL_WORD_SETS.filter(s => !existingSetIds.has(s.id));
+          this.wordSets = [...loadedSets, ...newSets];
+        } catch {
+          this.wordSets = [...INITIAL_WORD_SETS];
+        }
+      } else {
+        this.wordSets = [...INITIAL_WORD_SETS];
+      }
 
       // 9. Saved Words
       const storedSaved = localStorage.getItem(STORAGE_KEYS.SAVED_WORDS);
